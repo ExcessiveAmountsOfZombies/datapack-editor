@@ -1,178 +1,52 @@
-import net.fabricmc.loom.task.RemapJarTask
-
 plugins {
-    id 'fabric-loom' version '1.6-SNAPSHOT'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'multiloader-loader'
+    id 'net.fabricmc.fabric-loom'
 }
-
-archivesBaseName = project.modBaseArchiveName
-
-repositories {
-    maven { url "https://oss.sonatype.org/content/repositories/snapshots"}
-    maven { url 'https://jitpack.io' }
-    maven {
-        url "https://www.cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
-    }
-}
-
-configurations {
-    shade
-    compile.extendsFrom shade
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs += [
-                    rootProject.sourceSets.main.java
-            ]
-        }
-        resources {
-            srcDirs += [
-                    "src/main/generated",
-                    rootProject.sourceSets.main.resources
-            ]
-        }
-    }
-}
-
-processResources {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
-    from(sourceSets.main.resources.srcDirs) {
-        include "fabric.mod.json"
-        expand ("version": version,
-                "minecraftVersion": minecraftVersion
-        )
-    }
-}
-
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraftVersion}"
-    mappings loom.officialMojangMappings()
-    /*mappings loom.layered() {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-${project.minecraftVersion}:${project.parchmentVersion}")
-    }*/
-
-    modImplementation "net.fabricmc:fabric-loader:${project.fabricLoaderVersion}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabricAPIVersion}"
-
-    compileOnly("org.spongepowered:configurate-hocon:4.1.2")
-    compileOnly("org.spongepowered:configurate-core:4.1.2")
-    compileOnly("com.typesafe:config:1.4.2")
-    compileOnly("io.leangen.geantyref:geantyref:1.3.14")
-
-    testCompileOnly("org.spongepowered:configurate-hocon:4.1.2")
-    testCompileOnly("org.spongepowered:configurate-core:4.1.2")
-    testCompileOnly("com.typesafe:config:1.4.2")
-    testCompileOnly("io.leangen.geantyref:geantyref:1.3.14")
-
-
-    shade(rootProject)
-    compileOnly(rootProject)
-    implementation(rootProject)
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/epherolib.accesswidener")
-
+    def aw = project(':common').file("src/main/resources/${mod_id}.accesswidener")
+    if (aw.exists()) {
+        accessWidenerPath.set(aw)
+    }
     runs {
         client {
             client()
-            name "Fabric Client"
-            ideConfigGenerated = true
+            setConfigName('Fabric Client')
+            ideConfigGenerated(true)
+            runDir('runs/client')
         }
-
         server {
             server()
-            name "Fabric Server"
-            ideConfigGenerated = true
-        }
-
-        datagen {
-            server()
-            name "Data Generation"
-            vmArg "-Dfabric-api.datagen"
-            vmArg "-Dfabric-api.datagen.output-dir=${getRootProject().file("src/main/generated")}"
-            runDir "build/datagen"
-            ideConfigGenerated = true
+            setConfigName('Fabric Server')
+            ideConfigGenerated(true)
+            runDir('runs/server')
         }
     }
 }
 
-tasks.processResources.dependsOn(rootProject.tasks.processResources)
-
-def targetJavaVersion = 21
-tasks.withType(JavaCompile).configureEach {
-    it.options.encoding = "UTF-8"
-    source(rootProject.sourceSets.main.allSource)
-    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
-        it.options.release = targetJavaVersion
-    }
+tasks.named('shadowJar') {
+    archiveClassifier = ''
 }
 
-java {
-    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
-    }
-    archivesBaseName = project.modBaseArchiveName
-    withSourcesJar()
-}
-
-jar {
-    from("LICENSE") {
-        rename { "${it}_${project.archivesBaseName}" }
-    }
-}
-
-shadowJar {
-    setArchiveClassifier("")
-    enabled = true
-    archiveFileName = rootProject.modBaseArchiveName + "-${rootProject.minecraftVersion}-FABRIC-dev.jar"
-    configurations = [project.configurations.shade]
-    relocate("org.spongepowered.configurate", "com.epherical.epherolib.libs.org.spongepowered.configurate")
-    relocate("com.typesafe", "com.epherical.epherolib.libs.com.typesafe")
-    relocate("io.leangen", "com.epherical.epherolib.libs.io.leangen")
-}
-
-task remappedShadowJar(type: RemapJarTask) {
-    dependsOn tasks.shadowJar
-    input = tasks.shadowJar.archiveFile
-    archiveFileName = rootProject.modBaseArchiveName + "-FABRIC-${rootProject.version}.jar"
-}
-
-tasks.assemble.dependsOn tasks.remappedShadowJar
-tasks.compileJava.dependsOn(getRootProject().tasks.jar)
-tasks.remapSourcesJar.dependsOn(getRootProject().tasks.jar)
-
-artifacts {
-    archives remappedShadowJar
-    shadow shadowJar
-}
-
-// configure the maven publication
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifactId = "${modBaseArchiveName}-" + artifactId
-            //version = version + "-${minecraftVersion}"
-            // add all the jars that should be included when publishing to maven
-            artifact remappedShadowJar
+// Implement mcgradleconventions loader attribute
+def loaderAttribute = Attribute.of('io.github.mcgradleconventions.loader', String)
+['apiElements', 'runtimeElements', 'sourcesElements', 'javadocElements', 'includeInternal', 'modCompileClasspath'].each { variant ->
+    configurations.named("$variant") {
+        attributes {
+            attribute(loaderAttribute, 'fabric')
         }
     }
-
-    repositories {
-        maven {
-            name = "EphericalMaven"
-            url = "https://maven.epherical.com/releases"
-            credentials {
-                username = m_user
-                password = m_pass
+}
+sourceSets.configureEach {
+    [it.compileClasspathConfigurationName, it.runtimeClasspathConfigurationName].each { variant->
+        configurations.named("$variant") {
+            attributes {
+                attribute(loaderAttribute, 'fabric')
             }
         }
     }

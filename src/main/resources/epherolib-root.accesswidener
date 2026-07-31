@@ -1,3 +1,0 @@
-accessWidener	v1	named
-extendable method net/minecraft/network/chat/contents/TranslatableContents decompose ()V
-accessible field net/minecraft/network/chat/contents/TranslatableContents fallback Ljava/lang/String;

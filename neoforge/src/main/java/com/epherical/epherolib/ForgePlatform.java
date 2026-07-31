@@ -16,12 +16,12 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
 
     @Override
     public boolean isClientEnvironment() {
-        return FMLEnvironment.dist == Dist.CLIENT;
+        return FMLEnvironment.getDist() == Dist.CLIENT;
     }
 
     @Override
     public boolean isServerEnvironment() {
-        return FMLEnvironment.dist == Dist.DEDICATED_SERVER;
+        return FMLEnvironment.getDist() == Dist.DEDICATED_SERVER;
     }
 
     @Override
@@ -32,11 +32,6 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
     @Override
     public Path getRootConfigPath() {
         return FMLPaths.CONFIGDIR.get();
-    }
-
-    @Override
-    public String getPlayerLanguage(ServerPlayer player) {
-        return player.getLanguage();
     }
 
 }

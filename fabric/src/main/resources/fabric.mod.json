@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "epherolib",
+  "id": "${mod_id}",
   "version": "${version}",
-  "name": "EpheroLib",
-  "description": "",
+  "name": "${mod_name}",
+  "description": "${description}",
   "authors": [
-    "Thonk"
+    "${mod_author}"
   ],
   "contact": {
     "sources": "",
@@ -13,8 +13,8 @@
     "homepage": "",
     "irc": "https://discord.gg/GZjtAn3F6W"
   },
-  "license": "LGPL-3.0",
-  "icon": "",
+  "license": "${license}",
+  "icon": "${mod_id}.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -22,12 +22,13 @@
     ]
   },
   "mixins": [
-    "epherolib.mixins.json",
-    "epherolib-root.mixins.json"
+    "${mod_id}.mixins.json",
+    "${mod_id}.fabric.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.13.3",
+    "fabricloader": ">=${fabric_loader_version}",
     "fabric-api": "*",
-    "minecraft": ">=${minecraftVersion}"
+    "minecraft": ">=${minecraft_version}",
+    "java": ">=${java_version}"
   }
 }
