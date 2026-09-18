@@ -1,9 +1,12 @@
 package com.epherical.epherolib;
 
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.data.ConditionalLootTableSubProvider;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 @Mod(ModConstants.MOD_ID)
