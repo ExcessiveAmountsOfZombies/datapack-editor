@@ -34,7 +34,7 @@ public class LanguageConfig {
     private static final Pattern UNSUPPORTED_FORMAT_PATTERN = Pattern.compile("%(\\d+\\$)?[\\d.]*[df]");
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    protected static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
     private final boolean devEnvironment = Boolean.getBoolean(ModConstants.MOD_ID + ".dev");
 
     private final String folderName;

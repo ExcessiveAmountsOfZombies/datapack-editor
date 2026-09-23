@@ -15,6 +15,9 @@ configurations {
         canBeConsumed = false
     }
 }
+configurations.named('runtimeClasspath') {
+    extendsFrom(configurations.shadeRuntime)
+}
 
 dependencies {
     compileOnly(project(':common')) {
@@ -30,6 +33,10 @@ dependencies {
     shadeRuntime("org.spongepowered:configurate-core:4.1.2")
     shadeRuntime("com.typesafe:config:1.4.2")
     shadeRuntime("io.leangen.geantyref:geantyref:1.3.14")
+    shadeRuntime("io.javalin:javalin:7.2.3") {
+        exclude group: "org.slf4j", module: "slf4j-api"
+        exclude group: "org.ow2.asm"
+    }
 }
 
 tasks.named('compileJava', JavaCompile) {
@@ -49,7 +56,9 @@ tasks.named('javadoc', Javadoc).configure {
 
 tasks.named('sourcesJar', Jar) {
     dependsOn(configurations.commonJava)
-    from(configurations.commonJava)
+    from(configurations.commonJava) {
+        include '**/*.java'
+    }
     dependsOn(configurations.commonResources)
     from(configurations.commonResources)
 }
@@ -63,4 +72,9 @@ tasks.named('shadowJar') {
     relocate("org.spongepowered.configurate", "com.epherical.epherolib.libs.org.spongepowered.configurate")
     relocate("com.typesafe", "com.epherical.epherolib.libs.com.typesafe")
     relocate("io.leangen", "com.epherical.epherolib.libs.io.leangen")
+    relocate("io.javalin", "com.epherical.epherolib.libs.io.javalin")
+    relocate("org.eclipse.jetty", "com.epherical.epherolib.libs.org.eclipse.jetty")
+    relocate("jakarta", "com.epherical.epherolib.libs.jakarta")
+    relocate("kotlin", "com.epherical.epherolib.libs.kotlin")
+    mergeServiceFiles()
 }

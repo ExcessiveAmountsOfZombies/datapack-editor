@@ -12,4 +12,12 @@ plugins {
     //id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
+subprojects {
+    plugins.withId('java') {
+        sourceSets.configureEach {
+            java.include('**/*.java')
+        }
+    }
+}
+
 
