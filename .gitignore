@@ -112,6 +112,12 @@ gradle-app.setting
 .gradletasknamecache
 
 **/build/
+**/node_modules/
+
+# Frontend tool caches
+**/.vite/
+**/epherolib-workspace/
+**/epherolib/editor/
 
 # Common working directory
 run/

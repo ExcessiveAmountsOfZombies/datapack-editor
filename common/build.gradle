@@ -2,6 +2,7 @@ plugins {
     id 'multiloader-common'
     id 'net.neoforged.moddev'
     id 'com.gradleup.shadow'
+    id 'com.github.node-gradle.node'
 }
 
 configurations {
@@ -37,6 +38,28 @@ dependencies {
     }
 }
 
+def editorUiDirectory = rootProject.file('editor-ui')
+def editorAssetsDirectory = file('src/main/resources/epherolib/editor')
+
+node {
+    download = true
+    version = '24.13.0'
+    nodeProjectDir = editorUiDirectory
+}
+
+def buildEditorUi = tasks.register('buildEditorUi', NpmTask) {
+    dependsOn tasks.named('npmInstall')
+    args = ['run', 'build']
+    inputs.files(fileTree(editorUiDirectory) {
+        include 'src/**', 'index.html', 'vite.config.ts', 'tsconfig.json', 'package.json', 'package-lock.json'
+    })
+    outputs.dir(editorAssetsDirectory)
+}
+
+tasks.named('processResources') {
+    dependsOn buildEditorUi
+}
+
 configurations {
     commonJava {
         canBeResolved = false
@@ -59,8 +82,13 @@ artifacts {
 }
 
 tasks.register('sourceJar', Jar) {
+    dependsOn buildEditorUi
     archiveClassifier = 'sources'
     from sourceSets.main.allSource
+}
+
+tasks.named('sourcesJar', Jar) {
+    dependsOn buildEditorUi
 }
 
 shadowJar {

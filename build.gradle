@@ -4,6 +4,7 @@ plugins {
     // see https://projects.neoforged.net/neoforged/moddevgradle for new versions
     id 'net.neoforged.moddev' version '2.0.141' apply false
     id 'com.gradleup.shadow' version '9.4.1' apply false
+    id 'com.github.node-gradle.node' version '7.1.0' apply false
 
     //id 'java'
     //id 'org.spongepowered.gradle.vanilla' version '0.2.1-SNAPSHOT'

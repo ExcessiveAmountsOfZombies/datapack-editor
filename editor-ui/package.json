@@ -1,0 +1,26 @@
+{
+  "name": "epherolib-editor-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "monaco-editor": "0.56.0",
+    "preact": "10.29.8",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/babel__core": "7.20.5",
+    "@types/node": "26.6.1",
+    "@types/three": "0.186.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}

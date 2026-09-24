@@ -1,0 +1,223 @@
+import type {ComponentChildren} from "preact";
+import {useEffect, useRef, useState} from "preact/hooks";
+import {FileGlyph} from "../FileGlyph";
+import {ancestorKeys, entryKey, entrySource, toggleSet, type WorkspaceEntry, type WorkspaceTree} from "../model";
+
+export function useExplorerState(active: boolean) {
+    const [expanded, setExpanded] = useState(() => new Set<string>());
+    const [workspaceSectionOpen, setWorkspaceSectionOpen] = useState(true);
+    const [datapackSectionOpen, setDatapackSectionOpen] = useState(true);
+    const [revealedPath, setRevealedPath] = useState<string>();
+    const revealTimer = useRef<number>();
+
+    useEffect(() => {
+        if (!revealedPath || !active) return;
+        const frame = window.requestAnimationFrame(() => {
+            const row = Array.from(document.querySelectorAll<HTMLElement>("[data-entry-key]"))
+                .find(element => element.dataset.entryKey === revealedPath);
+            row?.scrollIntoView({block: "center"});
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [revealedPath, active, expanded]);
+
+    useEffect(() => () => {
+        if (revealTimer.current !== undefined) window.clearTimeout(revealTimer.current);
+    }, []);
+
+    return {
+        expanded,
+        workspaceSectionOpen,
+        datapackSectionOpen,
+        revealedPath,
+        toggleWorkspaceSection: () => setWorkspaceSectionOpen(value => !value),
+        toggleDatapackSection: () => setDatapackSectionOpen(value => !value),
+        toggleEntry: (key: string) => setExpanded(current => toggleSet(current, key)),
+        initialize: (entries: WorkspaceEntry[]) => setExpanded(current => current.size > 0 ? current : new Set(entries
+            .filter(entry => entry.type === "directory")
+            .map(entry => entryKey(entry)))),
+        expand: (key: string) => setExpanded(current => new Set(current).add(key)),
+        reveal: (entry: WorkspaceEntry) => {
+            const key = entryKey(entry);
+            if (entrySource(entry) === "datapack") setDatapackSectionOpen(true);
+            else setWorkspaceSectionOpen(true);
+            setExpanded(current => {
+                const next = new Set(current);
+                for (const ancestor of ancestorKeys(entry)) next.add(ancestor);
+                return next;
+            });
+            setRevealedPath(key);
+            if (revealTimer.current !== undefined) window.clearTimeout(revealTimer.current);
+            revealTimer.current = window.setTimeout(() => {
+                setRevealedPath(current => current === key ? undefined : current);
+                revealTimer.current = undefined;
+            }, 2200);
+        }
+    };
+}
+
+interface ExplorerViewProps {
+    tree?: WorkspaceTree;
+    datapacks?: WorkspaceTree;
+    expanded: Set<string>;
+    selectedPath?: string;
+    revealedPath?: string;
+    workspaceSectionOpen: boolean;
+    datapackSectionOpen: boolean;
+    onWorkspaceSectionToggle: () => void;
+    onDatapackSectionToggle: () => void;
+    onToggle: (key: string) => void;
+    onSelect: (key: string) => void;
+    onOpen: (entry: WorkspaceEntry) => void;
+    onContextMenu: (event: MouseEvent, entry: WorkspaceEntry) => void;
+    onRename: (entry: WorkspaceEntry) => void;
+    onDelete: (entry: WorkspaceEntry) => void;
+    onCreate: (type: "file" | "folder") => void;
+    onRefresh: () => void;
+}
+
+export function ExplorerView(props: ExplorerViewProps) {
+    const rows = (entries: WorkspaceEntry[] | undefined) => entries?.map(entry => (
+        <TreeRow key={entryKey(entry)} entry={entry} depth={0} expanded={props.expanded}
+                 selectedPath={props.selectedPath} revealedPath={props.revealedPath}
+                 onToggle={props.onToggle} onSelect={props.onSelect} onOpen={props.onOpen}
+                 onContextMenu={props.onContextMenu} onRename={props.onRename} onDelete={props.onDelete}/>
+    ));
+
+    return (
+        <>
+            <div class="flex h-11 items-center justify-between px-4 text-[11px] font-medium uppercase tracking-wide text-zinc-300">
+                <span>Explorer</span>
+                <div class="flex items-center gap-0.5">
+                    <ToolButton label="New file" onClick={() => props.onCreate("file")}>+F</ToolButton>
+                    <ToolButton label="New folder" onClick={() => props.onCreate("folder")}>+D</ToolButton>
+                    <ToolButton label="Refresh" onClick={props.onRefresh}>↻</ToolButton>
+                </div>
+            </div>
+            <div class="min-h-0 flex-1 overflow-auto text-[13px]">
+                <ExplorerSection title={props.tree?.root ?? "Workspace"} open={props.workspaceSectionOpen}
+                                 onToggle={props.onWorkspaceSectionToggle}>
+                    {rows(props.tree?.entries)}
+                </ExplorerSection>
+                <ExplorerSection title={props.datapacks?.root ?? "Loaded Datapacks"}
+                                 detail={props.datapacks ? String(props.datapacks.fileCount ?? 0) : undefined}
+                                 open={props.datapackSectionOpen} onToggle={props.onDatapackSectionToggle}>
+                    {rows(props.datapacks?.entries)}
+                </ExplorerSection>
+            </div>
+        </>
+    );
+}
+
+interface TreeRowProps {
+    entry: WorkspaceEntry;
+    depth: number;
+    expanded: Set<string>;
+    selectedPath?: string;
+    revealedPath?: string;
+    onToggle: (key: string) => void;
+    onSelect: (key: string) => void;
+    onOpen: (entry: WorkspaceEntry) => void;
+    onContextMenu: (event: MouseEvent, entry: WorkspaceEntry) => void;
+    onRename: (entry: WorkspaceEntry) => void;
+    onDelete: (entry: WorkspaceEntry) => void;
+}
+
+function TreeRow(props: TreeRowProps) {
+    const {entry} = props;
+    const isDirectory = entry.type === "directory";
+    const key = entryKey(entry);
+    const isExpanded = props.expanded.has(key);
+    return (
+        <>
+            <div data-entry-key={key} title={entry.path}
+                 class={`group flex h-6 cursor-default items-center pr-1 ${
+                     props.revealedPath === key
+                         ? "bg-violet-500/35 text-white outline outline-1 -outline-offset-1 outline-violet-300/70"
+                         : props.selectedPath === key ? "bg-[#37373d] text-white" : "text-zinc-300 hover:bg-[#2a2d2e]"
+                 }`}
+                 style={{paddingLeft: `${6 + props.depth * 12}px`}}
+                 onClick={() => {
+                     props.onSelect(key);
+                     if (isDirectory) props.onToggle(key);
+                     else props.onOpen(entry);
+                 }}
+                 onContextMenu={event => {
+                     props.onSelect(key);
+                     props.onContextMenu(event, entry);
+                 }}>
+                <span class="mr-1 inline-flex w-3 shrink-0 justify-center text-[9px] text-zinc-500">
+                    {isDirectory ? (isExpanded ? "▼" : "▶") : ""}
+                </span>
+                {isDirectory ? <FolderGlyph open={isExpanded}/> : <FileGlyph path={entry.path}/>}
+                <span class={`ml-1.5 min-w-0 flex-1 truncate ${entry.editable === false ? "opacity-50" : ""}`}>
+                    {entry.name}
+                </span>
+                {!entry.readOnly && (
+                    <span class="hidden items-center gap-0.5 group-hover:flex">
+                        <RowAction label="Rename" onClick={() => props.onRename(entry)}>R</RowAction>
+                        <RowAction label="Delete" onClick={() => props.onDelete(entry)}>×</RowAction>
+                    </span>
+                )}
+            </div>
+            {isDirectory && isExpanded && entry.children?.map(child => (
+                <TreeRow key={entryKey(child)} {...props} entry={child} depth={props.depth + 1}/>
+            ))}
+        </>
+    );
+}
+
+function ExplorerSection(props: {title: string; detail?: string; open: boolean; onToggle: () => void; children?: ComponentChildren}) {
+    return (
+        <section>
+            <button type="button"
+                    class="sticky top-0 z-10 flex h-7 w-full items-center border-y border-white/5 bg-[#1f1f1f] px-2 text-left text-[11px] font-bold uppercase tracking-wide text-zinc-200 hover:bg-[#252525]"
+                    onClick={props.onToggle} aria-expanded={props.open}>
+                <span class="mr-1 text-[9px]">{props.open ? "▼" : "▶"}</span>
+                <span class="min-w-0 flex-1 truncate">{props.title}</span>
+                {props.detail && <span class="ml-2 font-normal text-zinc-500">{props.detail}</span>}
+            </button>
+            {props.open && <div class="py-1">{props.children}</div>}
+        </section>
+    );
+}
+
+function ToolButton(props: {label: string; onClick: () => void; children: string}) {
+    return (
+        <button type="button" title={props.label} onClick={props.onClick}
+                class="h-6 rounded px-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-white">
+            {props.children}
+        </button>
+    );
+}
+
+function RowAction(props: {label: string; onClick: () => void; children: string}) {
+    return (
+        <button type="button" title={props.label}
+                onClick={event => {
+                    event.stopPropagation();
+                    props.onClick();
+                }}
+                class="flex h-5 w-5 items-center justify-center rounded text-[10px] text-zinc-400 hover:bg-white/10 hover:text-white">
+            {props.children}
+        </button>
+    );
+}
+
+function FolderGlyph({open}: {open: boolean}) {
+    return (
+        <svg class="shrink-0 text-amber-400" width="15" height="15" viewBox="0 0 16 16" fill="currentColor"
+             aria-hidden="true">
+            <path d={open ? "M1.5 4h5l1.2 1.3h6.8l-1.4 7.2H2.6z" : "M1.5 3h5l1.2 1.5h6.8v8H1.5z"}/>
+        </svg>
+    );
+}
+
+export function ExplorerGlyph() {
+    return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+             aria-hidden="true">
+            <path d="M6 3.5h8l4 4v13H6z"/>
+            <path d="M14 3.5v4h4M3 7.5v13h11"/>
+        </svg>
+    );
+}
