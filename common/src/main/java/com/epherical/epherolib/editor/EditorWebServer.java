@@ -47,8 +47,10 @@ public class EditorWebServer {
                     ctx.header("X-Content-Type-Options", "nosniff");
                     ctx.header("Referrer-Policy", "no-referrer");
                     ctx.header("Content-Security-Policy",
-                            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-                                    + "img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:");
+                            """
+                                    default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; \
+                                    img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:
+                                    """);
                 });
                 config.routes.before("/api/*", EditorWebServer::requireAccessToken);
                 config.routes.get("/api/status", ctx -> ctx
@@ -68,6 +70,20 @@ public class EditorWebServer {
                         .result(DataPackSchemaImpl.build(server.registryAccess())));
                 EditorWorkspace.registerRoutes(config);
                 datapacks.registerRoutes(config);
+                new EditorAssets(server).registerRoutes(config);
+                new EditorLootSimulation(server).registerRoutes(config);
+                // todo; maybe add a visualizer for other loot table types...
+                // todo; add a visualizer for configured or placed features
+                // todo; biome visualizer?
+                // todo; advancement visualizer?
+                // todo; recipe visualizer for sure, maybe it looks at the corresponding Menu class
+                //  so it can get the slots and the texture used? not sure, need something that'll work with
+                //  fairly easily though...
+                // todo; tag visualizer? eh
+
+
+                // todo; probably more of a feature, but what if you could edit the file by also clicking on buttons
+                //  does it reference the json schema we created? probably the best way to handle it, in a generic fashion...
             });
             newApplication.start(HOST, PORT);
             application = newApplication;

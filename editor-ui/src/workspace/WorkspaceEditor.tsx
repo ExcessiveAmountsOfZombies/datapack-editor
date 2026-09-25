@@ -1,6 +1,8 @@
-import {useEffect, useRef, useState} from "preact/hooks";
+import {useCallback, useEffect, useRef, useState} from "preact/hooks";
 import {ExplorerGlyph, ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
 import {FileGlyph} from "./FileGlyph";
+import {LootPreview} from "./LootPreview";
+import type {ChestSimulation} from "./lootTable";
 import {SearchGlyph, SearchView} from "./sidebar/SearchView";
 import {Sidebar} from "./sidebar/Sidebar";
 import {
@@ -44,6 +46,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
     const [openPaths, setOpenPaths] = useState<string[]>([]);
     const [activePath, setActivePath] = useState<string>();
     const [revision, setRevision] = useState(0);
+    const [simulationRevision, setSimulationRevision] = useState(0);
     const [message, setMessage] = useState("Loading workspace…");
     const [cursor, setCursor] = useState({line: 1, column: 1});
 
@@ -62,6 +65,19 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         }
         return response;
     };
+
+    const simulateLoot = useCallback(async (content: string): Promise<ChestSimulation> => {
+        const response = await fetch(`${apiRoot}/chest-simulation`, {
+            method: "POST",
+            headers: {"Authorization": `Bearer ${token}`, "Content-Type": "application/json"},
+            body: content
+        });
+        if (!response.ok) {
+            const result = await response.json() as {error?: string};
+            throw new Error(result.error ?? `Loot simulation failed (${response.status})`);
+        }
+        return response.json() as Promise<ChestSimulation>;
+    }, [token]);
 
     useEffect(() => {
         let cancelled = false;
@@ -234,14 +250,16 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             return;
         }
         try {
+            const content = model.getValue();
             setMessage(`Saving ${path}…`);
             await request(`/file?path=${encodeURIComponent(path)}`, {
                 method: "PUT",
                 headers: {"Content-Type": "text/plain; charset=utf-8"},
-                body: model.getValue()
+                body: content
             });
-            savedContent.current.set(path, model.getValue());
+            savedContent.current.set(path, content);
             setRevision(value => value + 1);
+            setSimulationRevision(value => value + 1);
             setMessage(`Saved ${path}`);
         } catch (reason) {
             setMessage(errorMessage(reason));
@@ -530,6 +548,10 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                     </div>
                 </footer>
             </div>
+
+            <LootPreview path={activePath ? displayPath(activePath) : undefined}
+                         content={activePath ? models.current.get(activePath)?.getValue() : undefined}
+                         token={token} simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>
 
             {contextMenu && (
                 <div class="fixed inset-0 z-50" onClick={() => setContextMenu(undefined)}

@@ -85,6 +85,7 @@ public class EditorDatapacks {
         // data/minecraft/datapacks rather than a registry directory.
         directories.add("datapacks");
         LOGGER.info("Scanning {} data-pack directories for editor files", directories.size());
+        // todo; need to register the codecs that neoforge adds.
         return directories;
     }
 
