@@ -14,19 +14,25 @@ import net.minecraft.server.packs.resources.IoSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 public class EditorAssets {
     private static final Gson GSON = new Gson();
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String ASSETS = "assets/";
     private static final int MAX_PATH_LENGTH = 512;
+    private static final List<String> BUNDLE_DIRECTORIES = List.of(
+            "items", "models", "blockstates", "textures", "atlases", "equipment", "particles");
     public static final String SOURCE = "source";
 
     public static final String CONTENT_TYPE = "application/json";
@@ -39,6 +45,7 @@ public class EditorAssets {
 
     private final List<Source> sources;
     private final String manifest;
+    private final CompletableFuture<byte[]> bundle;
 
     public EditorAssets(MinecraftServer server) {
         List<Source> orderedSources = new ArrayList<>();
@@ -79,6 +86,7 @@ public class EditorAssets {
             layers.add(Map.of("id", index, "name", sources.get(index).name));
         }
         manifest = GSON.toJson(Map.of("version", SharedConstants.getCurrentVersion().name(), "sources", layers));
+        bundle = CompletableFuture.supplyAsync(this::buildBundle);
     }
 
     public void registerRoutes(JavalinConfig config) {
@@ -87,7 +95,70 @@ public class EditorAssets {
                 .contentType(CONTENT_TYPE)
                 .result(manifest));
         config.routes.get("/api/asset-file", this::readFile);
+        config.routes.get("/api/asset-resolved", this::readResolvedFile);
         config.routes.get("/api/asset-list", this::listDirectory);
+        config.routes.get("/api/asset-list-resolved", this::listResolvedDirectory);
+        config.routes.get("/api/asset-bundle", this::readBundle);
+    }
+
+    private void readBundle(Context context) {
+        byte[] bytes = bundle.join();
+        if (bytes.length == 0) {
+            error(context, HttpStatus.SERVICE_UNAVAILABLE, "Asset bundle unavailable");
+            return;
+        }
+        context.header("Cache-Control", "private, max-age=300")
+                .contentType("application/zip")
+                .result(bytes);
+    }
+
+    private byte[] buildBundle() {
+        long started = System.nanoTime();
+        Set<String> included = new HashSet<>();
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             ZipOutputStream output = new ZipOutputStream(bytes)) {
+            for (Source source : sources) {
+                source.writeBundle(output, included);
+            }
+            if (!included.contains("assets/minecraft/textures/block/stone.png")
+                    || !included.contains("assets/minecraft/models/block/stone.json")
+                    || !included.contains("assets/minecraft/atlases/blocks.json")) {
+                LOGGER.warn("Editor asset bundle is incomplete; using individual asset reads");
+                return new byte[0];
+            }
+            output.finish();
+            byte[] result = bytes.toByteArray();
+            LOGGER.info("Prepared editor asset bundle with {} files and {} bytes in {} ms",
+                    included.size(), result.length, (System.nanoTime() - started) / 1_000_000);
+            return result;
+        } catch (IOException | RuntimeException exception) {
+            LOGGER.warn("Could not prepare editor asset bundle", exception);
+            return new byte[0];
+        }
+    }
+
+    private static boolean bundlePath(String path) {
+        if (!path.matches(ASSETS_PATHS)) return false;
+        for (String segment : path.split(FORWARD_SLASH)) {
+            if (segment.equals(".") || segment.equals("..")) return false;
+        }
+        String rest = path.substring(ASSETS.length());
+        int separator = rest.indexOf(FORWARD_SLASH_CHAR);
+        if (separator < 0) return false;
+        String asset = rest.substring(separator + 1);
+        for (String directory : BUNDLE_DIRECTORIES) {
+            if (asset.startsWith(directory + FORWARD_SLASH)) return true;
+        }
+        return false;
+    }
+
+    private static void bundleEntry(ZipOutputStream output, Set<String> included,
+                                    String path, byte[] bytes) throws IOException {
+        if (!bundlePath(path) || included.contains(path)) return;
+        output.putNextEntry(new ZipEntry(path));
+        output.write(bytes);
+        output.closeEntry();
+        included.add(path);
     }
 
     private void readFile(Context context) {
@@ -121,6 +192,43 @@ public class EditorAssets {
         context.header("Cache-Control", "private, max-age=300")
                 .contentType(CONTENT_TYPE)
                 .result(GSON.toJson(source.getListOfAssets(directory)));
+    }
+
+    private void readResolvedFile(Context context) {
+        String path = context.queryParam("path");
+        if (!validFilePath(path)) {
+            error(context, HttpStatus.BAD_REQUEST, "Invalid asset path");
+            return;
+        }
+        try {
+            for (Source source : sources) {
+                byte[] bytes = source.read(path);
+                if (bytes != null) {
+                    context.header("Cache-Control", "private, max-age=300")
+                            .contentType("application/octet-stream")
+                            .result(bytes);
+                    return;
+                }
+            }
+            error(context, HttpStatus.NOT_FOUND, "Asset not found");
+        } catch (IOException exception) {
+            error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not read asset");
+        }
+    }
+
+    private void listResolvedDirectory(Context context) {
+        String directory = context.queryParam("dir");
+        if (!validDirectory(directory)) {
+            error(context, HttpStatus.BAD_REQUEST, "Invalid asset directory");
+            return;
+        }
+        Set<String> names = new TreeSet<>();
+        for (Source source : sources) {
+            names.addAll(source.getListOfAssets(directory));
+        }
+        context.header("Cache-Control", "private, max-age=300")
+                .contentType(CONTENT_TYPE)
+                .result(GSON.toJson(names));
     }
 
     private @Nullable Source requestedSource(Context context) {
@@ -210,11 +318,46 @@ public class EditorAssets {
                 }
             }
             if (jar == null) return null;
+            int separator = path.lastIndexOf(FORWARD_SLASH_CHAR);
+            String directory = separator < 0 ? "" : path.substring(0, separator);
+            String fileName = path.substring(separator + 1);
+            if (!jarDirectories.getOrDefault(directory, Set.of()).contains(fileName)) return null;
             try (ZipFile zip = new ZipFile(jar.toFile())) {
                 ZipEntry entry = zip.getEntry(path);
                 if (entry == null || entry.isDirectory()) return null;
                 try (InputStream input = zip.getInputStream(entry)) {
                     return input.readAllBytes();
+                }
+            }
+        }
+
+        public void writeBundle(ZipOutputStream output, Set<String> included) throws IOException {
+            if (jar != null) {
+                try (ZipFile zip = new ZipFile(jar.toFile())) {
+                    var entries = zip.entries();
+                    while (entries.hasMoreElements()) {
+                        ZipEntry entry = entries.nextElement();
+                        String path = entry.getName();
+                        if (entry.isDirectory() || !bundlePath(path) || included.contains(path)) continue;
+                        try (InputStream input = zip.getInputStream(entry)) {
+                            bundleEntry(output, included, path, input.readAllBytes());
+                        }
+                    }
+                }
+                return;
+            }
+            if (pack == null) return;
+            for (String namespace : pack.getNamespaces(PackType.CLIENT_RESOURCES)) {
+                for (String directory : BUNDLE_DIRECTORIES) {
+                    pack.listResources(PackType.CLIENT_RESOURCES, namespace, directory, (location, supplier) -> {
+                        String path = ASSETS + namespace + FORWARD_SLASH + location.getPath();
+                        if (!bundlePath(path) || included.contains(path)) return;
+                        try (InputStream input = supplier.get()) {
+                            bundleEntry(output, included, path, input.readAllBytes());
+                        } catch (IOException exception) {
+                            throw new UncheckedIOException(exception);
+                        }
+                    });
                 }
             }
         }

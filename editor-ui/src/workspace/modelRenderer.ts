@@ -19,7 +19,7 @@ interface ItemDefinition {
 
 interface RendererModule {
     configure(options: {THREE: typeof THREE}): void;
-    prepareAssets(sources: VirtualAssets[], options: {cache: boolean; version: string}): Promise<unknown>;
+    prepareAssets(sources: Array<Blob | VirtualAssets>, options: {cache: boolean; version: string}): Promise<unknown>;
     renderItem(options: {id: string; components?: Record<string, unknown>; assets: unknown;
         width: number; height: number; version: string}): Promise<HTMLCanvasElement>;
 }
@@ -28,7 +28,8 @@ interface Session {
     renderer: RendererModule;
     assets: unknown;
     version: string;
-    icons: Map<string, string>;
+    icons: Map<string, string | null>;
+    pendingIcons: Map<string, Promise<string | undefined>>;
 }
 
 let rendererPromise: Promise<RendererModule> | undefined;
@@ -56,14 +57,25 @@ async function loadSession(token: string): Promise<Session> {
     }
     if (!sessionPromise) {
         sessionPromise = (async () => {
-            const renderer = await loadRenderer();
-            const manifestResponse = await fetch("/api/assets", {headers: {Authorization: `Bearer ${token}`}});
+            const headers = {Authorization: `Bearer ${token}`};
+            const [renderer, manifestResponse, bundleResponse] = await Promise.all([
+                loadRenderer(), fetch("/api/assets", {headers}), fetch("/api/asset-bundle", {headers})
+            ]);
             if (!manifestResponse.ok) throw new Error(`Asset list unavailable (${manifestResponse.status})`);
             const manifest = await manifestResponse.json() as AssetManifest;
             if (!manifest.sources.length) throw new Error("No client assets were found in loaded packs or mod jars.");
-            const sources = manifest.sources.map(source => assetHandler(source.id, token));
-            const assets = await renderer.prepareAssets(sources, {cache: true, version: manifest.version});
-            return {renderer, assets, version: manifest.version, icons: new Map()};
+            const bundled = bundleResponse.ok;
+            const sources: Array<Blob | VirtualAssets> = bundled
+                ? [await bundleResponse.blob(), assetHandler(token)] : [assetHandler(token)];
+            let assets: unknown;
+            try {
+                assets = await renderer.prepareAssets(sources, {cache: true, version: manifest.version});
+            } catch (reason) {
+                if (!bundled) throw reason;
+                assets = await renderer.prepareAssets([assetHandler(token)],
+                    {cache: true, version: manifest.version});
+            }
+            return {renderer, assets, version: manifest.version, icons: new Map(), pendingIcons: new Map()};
         })().catch(reason => {
             sessionPromise = undefined;
             throw reason;
@@ -72,14 +84,14 @@ async function loadSession(token: string): Promise<Session> {
     return sessionPromise;
 }
 
-function assetHandler(source: number, token: string): VirtualAssets {
+function assetHandler(token: string): VirtualAssets {
     const files = new Map<string, Promise<Uint8Array | null>>();
     const directories = new Map<string, Promise<string[]>>();
     return {
         read(path) {
             let pending = files.get(path);
             if (!pending) {
-                pending = fetch(`/api/asset-file?source=${source}&path=${encodeURIComponent(path)}`,
+                pending = fetch(`/api/asset-resolved?path=${encodeURIComponent(path)}`,
                     {headers: {Authorization: `Bearer ${token}`}}).then(async response => {
                     if (response.status === 404) return null;
                     if (!response.ok) throw new Error(`Asset read failed (${response.status}): ${path}`);
@@ -92,7 +104,7 @@ function assetHandler(source: number, token: string): VirtualAssets {
         list(directory) {
             let pending = directories.get(directory);
             if (!pending) {
-                pending = fetch(`/api/asset-list?source=${source}&dir=${encodeURIComponent(directory)}`,
+                pending = fetch(`/api/asset-list-resolved?dir=${encodeURIComponent(directory)}`,
                     {headers: {Authorization: `Bearer ${token}`}}).then(async response => {
                     if (!response.ok) throw new Error(`Asset list failed (${response.status}): ${directory}`);
                     return response.json() as Promise<string[]>;
@@ -102,6 +114,10 @@ function assetHandler(source: number, token: string): VirtualAssets {
             return pending;
         }
     };
+}
+
+export function preloadItemAssets(token: string): void {
+    void loadSession(token).catch(() => undefined);
 }
 
 function adaptItemDefinition(path: string, bytes: Uint8Array): Uint8Array {
@@ -114,34 +130,54 @@ function adaptItemDefinition(path: string, bytes: Uint8Array): Uint8Array {
     return new TextEncoder().encode(JSON.stringify(definition));
 }
 
-export async function renderItemIcons(slots: Array<ChestStack | null>, token: string): Promise<{icons: Record<number, string>; failed: string[]}> {
-    const {renderer, assets, version, icons: cache} = await loadSession(token);
-    const icons: Record<number, string> = {};
-    const failed: string[] = [];
-    for (let index = 0; index < slots.length; index++) {
-        const stack = slots[index];
-        if (!stack) continue;
-        const key = JSON.stringify([stack.id, stack.components ?? null]);
-        const cached = cache.get(key);
-        if (cached) {
-            icons[index] = cached;
-            continue;
-        }
+export async function renderItemIcon(stack: ChestStack, token: string): Promise<string | undefined> {
+    const session = await loadSession(token);
+    const key = JSON.stringify([stack.id, stack.components ?? null]);
+    if (session.icons.has(key)) return session.icons.get(key) ?? undefined;
+    const pending = session.pendingIcons.get(key);
+    if (pending) return pending;
+    const rendering = (async () => {
         try {
             const itemModel = stack.components?.["minecraft:item_model"];
             const modelId = typeof itemModel === "string" ? itemModel : stack.id;
-            const canvas = await renderer.renderItem({id: modelId, components: stack.components, assets,
-                width: 64, height: 64, version});
+            const canvas = await session.renderer.renderItem({id: modelId, components: stack.components,
+                assets: session.assets, width: 48, height: 48, version: session.version});
             const pixels = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data;
             if (!pixels?.some((value, index) => index % 4 === 3 && value > 0)) {
-                failed.push(stack.id);
-                continue;
+                session.icons.set(key, null);
+                return undefined;
             }
-            icons[index] = canvas.toDataURL("image/png");
-            cache.set(key, icons[index]);
+            const icon = canvas.toDataURL("image/png");
+            session.icons.set(key, icon);
+            return icon;
         } catch {
-            failed.push(stack.id);
+            session.icons.set(key, null);
+            return undefined;
+        } finally {
+            session.pendingIcons.delete(key);
         }
-    }
+    })();
+    session.pendingIcons.set(key, rendering);
+    return rendering;
+}
+
+export async function renderItemIcons(slots: Array<ChestStack | null>, token: string,
+                                      onIcon?: (index: number, icon: string) => void): Promise<{icons: Record<number, string>; failed: string[]}> {
+    const icons: Record<number, string> = {};
+    const failed: string[] = [];
+    let next = 0;
+    const workers = Array.from({length: Math.min(6, slots.length)}, async () => {
+        while (next < slots.length) {
+            const index = next++;
+            const stack = slots[index];
+            if (!stack) continue;
+            const icon = await renderItemIcon(stack, token);
+            if (icon) {
+                icons[index] = icon;
+                onIcon?.(index, icon);
+            } else failed.push(stack.id);
+        }
+    });
+    await Promise.all(workers);
     return {icons, failed};
 }
