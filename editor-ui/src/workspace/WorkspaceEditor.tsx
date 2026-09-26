@@ -2,7 +2,11 @@ import {useCallback, useEffect, useRef, useState} from "preact/hooks";
 import {ExplorerGlyph, ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
 import {FileGlyph} from "./FileGlyph";
 import {LootPreview} from "./LootPreview";
-import type {ChestSimulation} from "./lootTable";
+import {PreviewPanel} from "./PreviewPanel";
+import {RecipePreview} from "./RecipePreview";
+import {isChestLootTablePath, type ChestSimulation} from "./lootTable";
+import {isRecipePath} from "./recipe";
+import {preloadItemAssets} from "./modelRenderer";
 import {SearchGlyph, SearchView} from "./sidebar/SearchView";
 import {Sidebar} from "./sidebar/Sidebar";
 import {
@@ -78,6 +82,8 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         }
         return response.json() as Promise<ChestSimulation>;
     }, [token]);
+
+    useEffect(() => { preloadItemAssets(token); }, [token]);
 
     useEffect(() => {
         let cancelled = false;
@@ -549,9 +555,22 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                 </footer>
             </div>
 
-            <LootPreview path={activePath ? displayPath(activePath) : undefined}
-                         content={activePath ? models.current.get(activePath)?.getValue() : undefined}
-                         token={token} simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>
+            <PreviewPanel>
+                {isRecipePath(activePath ? displayPath(activePath) : undefined) &&
+                    <RecipePreview path={activePath ? displayPath(activePath) : undefined}
+                                   content={activePath ? models.current.get(activePath)?.getValue() : undefined}
+                                   token={token} readOnly={activeReadOnly} onContentChange={content => {
+                        if (!activePath || activeReadOnly) return;
+                        const model = models.current.get(activePath);
+                        if (!model) return;
+                        model.pushStackElement();
+                        model.pushEditOperations([], [{range: model.getFullModelRange(), text: content}], () => null);
+                        model.pushStackElement();
+                    }}/>}
+                {isChestLootTablePath(activePath ? displayPath(activePath) : undefined) &&
+                    <LootPreview content={activePath ? models.current.get(activePath)?.getValue() : undefined}
+                                 token={token} simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>}
+            </PreviewPanel>
 
             {contextMenu && (
                 <div class="fixed inset-0 z-50" onClick={() => setContextMenu(undefined)}

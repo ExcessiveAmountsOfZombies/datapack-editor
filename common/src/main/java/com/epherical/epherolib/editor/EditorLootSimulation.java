@@ -11,12 +11,12 @@ import com.mojang.serialization.JsonOps;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -115,13 +116,14 @@ public class EditorLootSimulation {
         LootParams params = new LootParams.Builder(level)
                 .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(BlockPos.ZERO))
                 .create(LootContextParamSets.CHEST);
-        long seed = server.overworld().getSeed();
+        long seed = ThreadLocalRandom.current().nextLong();
         if (seed == 0L) seed = 1L;
-        ObjectArrayList<ItemStack> randomItems = table.getRandomItems(params, server.overworld().getRandom());
+        SimpleContainer chest = new SimpleContainer(CHEST_SLOTS);
+        table.fill(chest, params, seed);
 
         JsonArray slots = new JsonArray();
         for (int index = 0; index < CHEST_SLOTS; index++) {
-            ItemStack stack = randomItems.get(index);
+            ItemStack stack = chest.getItem(index);
             if (stack.isEmpty()) {
                 slots.add(JsonNull.INSTANCE);
                 continue;

@@ -1,9 +1,8 @@
-import {useEffect, useMemo, useRef, useState} from "preact/hooks";
+import {useEffect, useMemo, useState} from "preact/hooks";
 import {renderItemIcons} from "./modelRenderer";
-import {chestLootError, isChestLootTablePath, type ChestSimulation} from "./lootTable";
+import {chestLootError, type ChestSimulation} from "./lootTable";
 
 interface LootPreviewProps {
-    path?: string;
     content?: string;
     token: string;
     simulationRevision: number;
@@ -11,53 +10,20 @@ interface LootPreviewProps {
 }
 
 const chestSize = 27;
-const openKey = "epherolib.editor.visualizerOpen";
-const widthKey = "epherolib.editor.visualizerWidth";
-const defaultWidth = 380;
-const minWidth = 280;
-const maxWidth = 900;
 
-function readOpen() {
-    try {
-        return window.localStorage.getItem(openKey) !== "false";
-    } catch {
-        return true;
-    }
-}
-
-function clampWidth(width: number) {
-    const viewportMaximum = typeof window === "undefined" ? maxWidth : Math.max(minWidth, window.innerWidth - 400);
-    return Math.round(Math.max(minWidth, Math.min(maxWidth, viewportMaximum, width)));
-}
-
-function readWidth() {
-    try {
-        const stored = Number(window.localStorage.getItem(widthKey));
-        return clampWidth(Number.isFinite(stored) && stored > 0 ? stored : defaultWidth);
-    } catch {
-        return defaultWidth;
-    }
-}
-
-export function LootPreview({path, content, token, simulationRevision, simulateLoot}: LootPreviewProps) {
-    const [open, setOpen] = useState(readOpen);
-    const [width, setWidth] = useState(readWidth);
-    const [resizing, setResizing] = useState(false);
-    const resize = useRef<{pointerId: number; startX: number; startWidth: number}>();
+export function LootPreview({content, token, simulationRevision, simulateLoot}: LootPreviewProps) {
     const [reroll, setReroll] = useState(0);
     const [simulation, setSimulation] = useState<ChestSimulation>();
     const [loading, setLoading] = useState(false);
     const [simulationError, setSimulationError] = useState<string>();
     const [icons, setIcons] = useState<{seed: string; values: Record<number, string>}>();
     const [assetError, setAssetError] = useState<string>();
-    const eligible = isChestLootTablePath(path);
-    const contentError = useMemo(() => eligible && content !== undefined ? chestLootError(content) : undefined,
-        [eligible, content]);
+    const contentError = useMemo(() => content !== undefined ? chestLootError(content) : undefined, [content]);
 
     useEffect(() => {
         setSimulation(undefined);
         setSimulationError(undefined);
-        if (!open || !eligible || !path || content === undefined || contentError) {
+        if (content === undefined || contentError) {
             setLoading(false);
             return;
         }
@@ -80,90 +46,32 @@ export function LootPreview({path, content, token, simulationRevision, simulateL
             cancelled = true;
             window.clearTimeout(timeout);
         };
-    }, [open, eligible, path, content, contentError, simulationRevision, reroll, simulateLoot]);
+    }, [content, contentError, simulationRevision, reroll, simulateLoot]);
 
     useEffect(() => {
         setIcons(undefined);
         setAssetError(undefined);
-        if (!open || !simulation) return;
+        if (!simulation) return;
         let cancelled = false;
-        void renderItemIcons(simulation.slots, token).then(result => {
+        void renderItemIcons(simulation.slots, token, (index, icon) => {
             if (cancelled) return;
-            setIcons({seed: simulation.seed, values: result.icons});
+            setIcons(current => ({seed: simulation.seed,
+                values: {...(current?.seed === simulation.seed ? current.values : {}), [index]: icon}}));
+        }).then(result => {
+            if (cancelled) return;
             if (result.failed.length) setAssetError(`Could not render ${result.failed.length} item models.`);
         }).catch(reason => {
             if (!cancelled) setAssetError(reason instanceof Error ? reason.message : String(reason));
         });
         return () => { cancelled = true; };
-    }, [open, simulation, token]);
+    }, [simulation, token]);
 
-    const toggle = () => {
-        const next = !open;
-        setOpen(next);
-        try {
-            window.localStorage.setItem(openKey, String(next));
-        } catch {}
-    };
-    const setAndStoreWidth = (nextWidth: number) => {
-        const next = clampWidth(nextWidth);
-        setWidth(next);
-        try {
-            window.localStorage.setItem(widthKey, String(next));
-        } catch {}
-    };
-    const finishResize = (event: PointerEvent) => {
-        const current = resize.current;
-        if (!current || current.pointerId !== event.pointerId) return;
-        resize.current = undefined;
-        setResizing(false);
-        setAndStoreWidth(current.startWidth + current.startX - event.clientX);
-    };
     const filled = simulation?.slots.filter(stack => stack !== null).length ?? 0;
 
     return (
-        <aside class={`relative flex min-h-0 shrink-0 flex-col border-l border-black/50 bg-[#181818] text-zinc-200 ${resizing ? "sidebar-resizing" : ""}`}
-               style={{width: open ? `min(${width}px, max(${minWidth}px, calc(100vw - 400px)))` : "40px"}}
-               aria-label="Visualize Datapack File">
-            {open && <div role="separator" aria-label="Resize visualizer" aria-orientation="vertical"
-                          aria-valuemin={minWidth} aria-valuemax={maxWidth} aria-valuenow={width}
-                          tabIndex={0} title="Drag to resize visualizer double-click to reset"
-                          class="group absolute -left-1 top-0 z-20 h-full w-2 cursor-col-resize touch-none outline-none"
-                          onPointerDown={event => {
-                              event.preventDefault();
-                              resize.current = {pointerId: event.pointerId, startX: event.clientX, startWidth: width};
-                              event.currentTarget.setPointerCapture(event.pointerId);
-                              setResizing(true);
-                          }}
-                          onPointerMove={event => {
-                              const current = resize.current;
-                              if (current?.pointerId === event.pointerId) {
-                                  setWidth(clampWidth(current.startWidth + current.startX - event.clientX));
-                              }
-                          }}
-                          onPointerUp={finishResize} onPointerCancel={finishResize}
-                          onDblClick={() => setAndStoreWidth(defaultWidth)}
-                          onKeyDown={event => {
-                              const step = event.shiftKey ? 64 : 16;
-                              if (event.key === "ArrowLeft") setAndStoreWidth(width + step);
-                              else if (event.key === "ArrowRight") setAndStoreWidth(width - step);
-                              else if (event.key === "Home") setAndStoreWidth(minWidth);
-                              else if (event.key === "End") setAndStoreWidth(maxWidth);
-                              else return;
-                              event.preventDefault();
-                          }}>
-                <span class="mx-auto block h-full w-px bg-transparent group-hover:bg-violet-400 group-focus:bg-violet-400"/>
-            </div>}
-            <div class="flex h-9 shrink-0 items-center border-b border-black/50">
-                <button type="button" aria-label={open ? "Collapse visualizer" : "Expand visualizer"}
-                        aria-expanded={open} title={open ? "Collapse visualizer" : "Expand visualizer"}
-                        class="flex h-9 w-10 shrink-0 items-center justify-center text-zinc-400 hover:bg-white/5 hover:text-white"
-                        onClick={toggle}>{open ? ">" : "<"}</button>
-                {open && <span class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Visualizer</span>}
-            </div>
-            {open && <div class="min-h-0 overflow-y-auto px-4 py-5 [container-type:inline-size]">
-                {!eligible && <p class="text-xs text-zinc-500">Open a chest loot table to simulate its contents.</p>}
-                {eligible && contentError && <p class="text-xs text-amber-300">{contentError}</p>}
-                {eligible && !contentError && <>
+        <div class="text-xs text-zinc-300">
+                {contentError && <p class="text-amber-300">{contentError}</p>}
+                {!contentError && <>
                     <div class="mb-3 flex items-center justify-end text-xs text-zinc-400">
                         {loading && <span class="mr-auto" role="status">Rolling chest…</span>}
                         <button type="button" disabled={loading || content === undefined}
@@ -196,7 +104,6 @@ export function LootPreview({path, content, token, simulationRevision, simulateL
                     {assetError && <p class="mt-3 text-xs text-amber-300">Item preview unavailable: {assetError}</p>}
                     {simulation && !filled && <p class="mt-3 text-xs text-zinc-500">This roll produced no items.</p>}
                 </>}
-            </div>}
-        </aside>
+        </div>
     );
 }
