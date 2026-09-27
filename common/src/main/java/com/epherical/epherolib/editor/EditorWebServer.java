@@ -76,7 +76,6 @@ public class EditorWebServer {
                 // todo; maybe add a visualizer for other loot table types...
                 // todo; add a visualizer for configured or placed features
                 // todo; biome visualizer?
-                // todo; advancement visualizer?
                 // todo; recipe visualizer for sure, maybe it looks at the corresponding Menu class
                 //  so it can get the slots and the texture used? not sure, need something that'll work with
                 //  fairly easily though...

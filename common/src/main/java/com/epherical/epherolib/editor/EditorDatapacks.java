@@ -127,6 +127,13 @@ public class EditorDatapacks {
                 .contentType("application/json")
                 .result(treeJson));
         config.routes.get(FORWARD_SLASH + "api/datapack-file", this::readFile);
+        config.routes.get(FORWARD_SLASH + "api/advancements", context -> context
+                .header("Cache-Control", "no-store")
+                .contentType("application/json")
+                .result(GSON.toJson(files.entrySet().stream()
+                        .filter(entry -> entry.getKey().matches(".*/data/[^/]+/advancements?/.*\\.json"))
+                        .map(entry -> Map.of("path", entry.getKey(), "content", entry.getValue()))
+                        .toList())));
         config.routes.post(FORWARD_SLASH + "api/datapack-override", this::createOverride);
     }
 
@@ -255,5 +262,6 @@ public class EditorDatapacks {
         }
     }
 
-    private record LoadedFile(String path, String content) {}
+    private record LoadedFile(String path, String content) {
+    }
 }

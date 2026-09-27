@@ -169,7 +169,8 @@ public class EditorWorkspace {
             Path source = resolveEntry(requiredQuery(context, PATH));
             Path target = resolveEntry(requiredQuery(context, TARGET));
             requireExistingEntry(source);
-            if (Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
+                    && !source.getFileName().equals(target.getFileName())) {
                 requireEditableExtension(target);
             }
             requireExistingParent(target);

@@ -1,7 +1,15 @@
 import type {ComponentChildren} from "preact";
 import {useEffect, useRef, useState} from "preact/hooks";
 import {FileGlyph} from "../FileGlyph";
-import {ancestorKeys, entryKey, entrySource, toggleSet, type WorkspaceEntry, type WorkspaceTree} from "../model";
+import {
+    ancestorKeys,
+    entryKey,
+    entrySource,
+    toggleSet,
+    type WorkspaceEntry,
+    workspaceMoveTarget,
+    type WorkspaceTree
+} from "../model";
 
 export function useExplorerState(active: boolean) {
     const [expanded, setExpanded] = useState(() => new Set<string>());
@@ -36,6 +44,8 @@ export function useExplorerState(active: boolean) {
             .filter(entry => entry.type === "directory")
             .map(entry => entryKey(entry)))),
         expand: (key: string) => setExpanded(current => new Set(current).add(key)),
+        remap: (source: string, target: string) => setExpanded(current => new Set([...current].map(key =>
+            key === source ? target : key.startsWith(`${source}/`) ? `${target}${key.slice(source.length)}` : key))),
         reveal: (entry: WorkspaceEntry) => {
             const key = entryKey(entry);
             if (entrySource(entry) === "datapack") setDatapackSectionOpen(true);
@@ -73,19 +83,40 @@ interface ExplorerViewProps {
     onDelete: (entry: WorkspaceEntry) => void;
     onCreate: (type: "file" | "folder") => void;
     onRefresh: () => void;
+    onMove: (entry: WorkspaceEntry, target: string) => void;
 }
 
 export function ExplorerView(props: ExplorerViewProps) {
+    const [dragged, setDragged] = useState<WorkspaceEntry>();
+    const [dropTarget, setDropTarget] = useState<string>();
+    const targetFor = (entry: WorkspaceEntry, directory: string) =>
+        workspaceMoveTarget(props.tree?.entries, entry, directory);
+    const clearDrag = () => {
+        setDragged(undefined);
+        setDropTarget(undefined);
+    };
+    const dropInto = (event: DragEvent, directory: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const source = event.dataTransfer?.getData("application/x-epherolib-workspace");
+        const target = dragged && source === dragged.path && targetFor(dragged, directory);
+        if (dragged && target) props.onMove(dragged, target);
+        clearDrag();
+    };
     const rows = (entries: WorkspaceEntry[] | undefined) => entries?.map(entry => (
         <TreeRow key={entryKey(entry)} entry={entry} depth={0} expanded={props.expanded}
                  selectedPath={props.selectedPath} revealedPath={props.revealedPath}
                  onToggle={props.onToggle} onSelect={props.onSelect} onOpen={props.onOpen}
-                 onContextMenu={props.onContextMenu} onRename={props.onRename} onDelete={props.onDelete}/>
+                 onContextMenu={props.onContextMenu} onRename={props.onRename} onDelete={props.onDelete}
+                 dragged={dragged} dropTarget={dropTarget} onDragStart={setDragged}
+                 onDragEnd={clearDrag} onDropTarget={setDropTarget} onDropInto={dropInto}
+                 targetFor={targetFor}/>
     ));
 
     return (
         <>
-            <div class="flex h-11 items-center justify-between px-4 text-[11px] font-medium uppercase tracking-wide text-zinc-300">
+            <div
+                class="flex h-11 items-center justify-between px-4 text-[11px] font-medium uppercase tracking-wide text-zinc-300">
                 <span>Explorer</span>
                 <div class="flex items-center gap-0.5">
                     <ToolButton label="New file" onClick={() => props.onCreate("file")}>+F</ToolButton>
@@ -95,7 +126,18 @@ export function ExplorerView(props: ExplorerViewProps) {
             </div>
             <div class="min-h-0 flex-1 overflow-auto text-[13px]">
                 <ExplorerSection title={props.tree?.root ?? "Workspace"} open={props.workspaceSectionOpen}
-                                 onToggle={props.onWorkspaceSectionToggle}>
+                                 onToggle={props.onWorkspaceSectionToggle} dropActive={dropTarget === ""}
+                                 onDragOver={event => {
+                                     if (!dragged || !targetFor(dragged, "")) return;
+                                     event.preventDefault();
+                                     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                                     setDropTarget("");
+                                 }} onDragLeave={event => {
+                    if (event.relatedTarget instanceof Node && event.currentTarget instanceof Node
+                        && event.currentTarget.contains(event.relatedTarget)) return;
+                    setDropTarget(current => current === "" ? undefined : current);
+                }}
+                                 onDrop={event => dropInto(event, "")}>
                     {rows(props.tree?.entries)}
                 </ExplorerSection>
                 <ExplorerSection title={props.datapacks?.root ?? "Loaded Datapacks"}
@@ -120,6 +162,13 @@ interface TreeRowProps {
     onContextMenu: (event: MouseEvent, entry: WorkspaceEntry) => void;
     onRename: (entry: WorkspaceEntry) => void;
     onDelete: (entry: WorkspaceEntry) => void;
+    dragged?: WorkspaceEntry;
+    dropTarget?: string;
+    onDragStart: (entry: WorkspaceEntry) => void;
+    onDragEnd: () => void;
+    onDropTarget: (path: string | undefined) => void;
+    onDropInto: (event: DragEvent, directory: string) => void;
+    targetFor: (entry: WorkspaceEntry, directory: string) => string | undefined;
 }
 
 function TreeRow(props: TreeRowProps) {
@@ -127,15 +176,46 @@ function TreeRow(props: TreeRowProps) {
     const isDirectory = entry.type === "directory";
     const key = entryKey(entry);
     const isExpanded = props.expanded.has(key);
+    const workspaceEntry = entrySource(entry) === "workspace" && !entry.readOnly;
+    const canDrop = workspaceEntry && isDirectory && props.dragged &&
+        props.targetFor(props.dragged, entry.path) !== undefined;
     return (
         <>
-            <div data-entry-key={key} title={entry.path}
+            <div data-entry-key={key} title={entry.path} draggable={workspaceEntry}
                  class={`group flex h-6 cursor-default items-center pr-1 ${
-                     props.revealedPath === key
-                         ? "bg-violet-500/35 text-white outline outline-1 -outline-offset-1 outline-violet-300/70"
-                         : props.selectedPath === key ? "bg-[#37373d] text-white" : "text-zinc-300 hover:bg-[#2a2d2e]"
+                     props.dropTarget === entry.path && canDrop
+                         ? "bg-violet-600/40 text-white outline outline-1 -outline-offset-1 outline-violet-400"
+                         : props.revealedPath === key
+                             ? "bg-violet-500/35 text-white outline outline-1 -outline-offset-1 outline-violet-300/70"
+                             : props.selectedPath === key ? "bg-[#37373d] text-white" : "text-zinc-300 hover:bg-[#2a2d2e]"
                  }`}
                  style={{paddingLeft: `${6 + props.depth * 12}px`}}
+                 onDragStart={event => {
+                     if (!workspaceEntry || !event.dataTransfer) {
+                         event.preventDefault();
+                         return;
+                     }
+                     event.dataTransfer.effectAllowed = "move";
+                     event.dataTransfer.setData("application/x-epherolib-workspace", entry.path);
+                     props.onDragStart(entry);
+                 }} onDragEnd={props.onDragEnd}
+                 onDragOver={event => {
+                     if (!props.dragged) return;
+                     event.stopPropagation();
+                     if (!canDrop) {
+                         props.onDropTarget(undefined);
+                         return;
+                     }
+                     event.preventDefault();
+                     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                     props.onDropTarget(entry.path);
+                 }} onDragLeave={event => {
+                if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+                if (props.dropTarget === entry.path) props.onDropTarget(undefined);
+            }} onDrop={event => {
+                event.stopPropagation();
+                if (canDrop) props.onDropInto(event, entry.path);
+            }}
                  onClick={() => {
                      props.onSelect(key);
                      if (isDirectory) props.onToggle(key);
@@ -166,11 +246,17 @@ function TreeRow(props: TreeRowProps) {
     );
 }
 
-function ExplorerSection(props: {title: string; detail?: string; open: boolean; onToggle: () => void; children?: ComponentChildren}) {
+function ExplorerSection(props: {
+    title: string; detail?: string; open: boolean; onToggle: () => void;
+    children?: ComponentChildren; dropActive?: boolean; onDragOver?: (event: DragEvent) => void;
+    onDragLeave?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void
+}) {
     return (
         <section>
             <button type="button"
-                    class="sticky top-0 z-10 flex h-7 w-full items-center border-y border-white/5 bg-[#1f1f1f] px-2 text-left text-[11px] font-bold uppercase tracking-wide text-zinc-200 hover:bg-[#252525]"
+                    class={`sticky top-0 z-10 flex h-7 w-full items-center border-y px-2 text-left text-[11px] font-bold uppercase tracking-wide hover:bg-[#252525] ${props.dropActive
+                        ? "border-violet-400 bg-violet-600/40 text-white" : "border-white/5 bg-[#1f1f1f] text-zinc-200"}`}
+                    onDragOver={props.onDragOver} onDragLeave={props.onDragLeave} onDrop={props.onDrop}
                     onClick={props.onToggle} aria-expanded={props.open}>
                 <span class="mr-1 text-[9px]">{props.open ? "▼" : "▶"}</span>
                 <span class="min-w-0 flex-1 truncate">{props.title}</span>
@@ -181,7 +267,7 @@ function ExplorerSection(props: {title: string; detail?: string; open: boolean; 
     );
 }
 
-function ToolButton(props: {label: string; onClick: () => void; children: string}) {
+function ToolButton(props: { label: string; onClick: () => void; children: string }) {
     return (
         <button type="button" title={props.label} onClick={props.onClick}
                 class="h-6 rounded px-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-white">
@@ -190,7 +276,7 @@ function ToolButton(props: {label: string; onClick: () => void; children: string
     );
 }
 
-function RowAction(props: {label: string; onClick: () => void; children: string}) {
+function RowAction(props: { label: string; onClick: () => void; children: string }) {
     return (
         <button type="button" title={props.label}
                 onClick={event => {
@@ -203,7 +289,7 @@ function RowAction(props: {label: string; onClick: () => void; children: string}
     );
 }
 
-function FolderGlyph({open}: {open: boolean}) {
+function FolderGlyph({open}: { open: boolean }) {
     return (
         <svg class="shrink-0 text-amber-400" width="15" height="15" viewBox="0 0 16 16" fill="currentColor"
              aria-hidden="true">

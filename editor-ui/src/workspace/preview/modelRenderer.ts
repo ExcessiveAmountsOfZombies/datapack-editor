@@ -13,10 +13,6 @@ interface VirtualAssets {
     list(directory: string): Promise<string[]>;
 }
 
-interface ItemDefinition {
-    model?: {type?: string; base_model?: unknown};
-}
-
 interface RendererModule {
     configure(options: {THREE: typeof THREE}): void;
     prepareAssets(sources: Array<Blob | VirtualAssets>, options: {cache: boolean; version: string}): Promise<unknown>;
@@ -95,7 +91,7 @@ function assetHandler(token: string): VirtualAssets {
                     {headers: {Authorization: `Bearer ${token}`}}).then(async response => {
                     if (response.status === 404) return null;
                     if (!response.ok) throw new Error(`Asset read failed (${response.status}): ${path}`);
-                    return adaptItemDefinition(path, new Uint8Array(await response.arrayBuffer()));
+                    return new Uint8Array(await response.arrayBuffer());
                 });
                 files.set(path, pending);
             }
@@ -118,16 +114,6 @@ function assetHandler(token: string): VirtualAssets {
 
 export function preloadItemAssets(token: string): void {
     void loadSession(token).catch(() => undefined);
-}
-
-function adaptItemDefinition(path: string, bytes: Uint8Array): Uint8Array {
-    // had to do this because neoforge overrides the models for vanilla armors and i couldn't see them
-    //  there might be more that needs to be done here, but i think it's ok for now
-    if (!/^assets\/[^/]+\/items\/.+\.json$/.test(path)) return bytes;
-    const definition = JSON.parse(new TextDecoder().decode(bytes)) as ItemDefinition;
-    if (definition.model?.type !== "neoforge:trimmed_armor" || !definition.model.base_model) return bytes;
-    definition.model = definition.model.base_model as ItemDefinition["model"];
-    return new TextEncoder().encode(JSON.stringify(definition));
 }
 
 export async function renderItemIcon(stack: ChestStack, token: string): Promise<string | undefined> {

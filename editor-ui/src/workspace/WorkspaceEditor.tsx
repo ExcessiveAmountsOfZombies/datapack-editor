@@ -1,25 +1,37 @@
-import {useCallback, useEffect, useRef, useState} from "preact/hooks";
+import {useCallback, useEffect, useMemo, useRef, useState} from "preact/hooks";
 import {ExplorerGlyph, ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
 import {FileGlyph} from "./FileGlyph";
-import {LootPreview} from "./LootPreview";
-import {PreviewPanel} from "./PreviewPanel";
-import {RecipePreview} from "./RecipePreview";
-import {isChestLootTablePath, type ChestSimulation} from "./lootTable";
-import {isRecipePath} from "./recipe";
-import {preloadItemAssets} from "./modelRenderer";
+import {LootPreview} from "./preview/LootPreview";
+import {AdvancementPreview} from "./preview/AdvancementPreview";
+import {PreviewPanel} from "./preview/PreviewPanel";
+import {RecipePreview} from "./preview/RecipePreview";
+import {type ChestSimulation, isChestLootTablePath} from "./preview/lootTable";
+import {isRecipePath} from "./preview/recipe";
+import {preloadItemAssets} from "./preview/modelRenderer";
+import {isAdvancementPath} from "./preview/advancement";
 import {SearchGlyph, SearchView} from "./sidebar/SearchView";
 import {Sidebar} from "./sidebar/Sidebar";
 import {
-    countEntries, datapackOverridePath, datapackPrefix, displayPath, entryKey, entrySource,
-    fileName, findEntry, findFirstEditable, isDatapackKey, selectedDirectory,
-    type WorkspaceEntry, type WorkspaceTree
+    countEntries,
+    datapackOverridePath,
+    datapackPrefix,
+    displayPath,
+    entryKey,
+    entrySource,
+    fileName,
+    findEntry,
+    findFirstEditable,
+    isDatapackKey,
+    selectedDirectory,
+    type WorkspaceEntry,
+    type WorkspaceTree
 } from "./model";
 import {
     configureDataPackSchemas,
     configureRecipeSchema,
     configureTagSchemas,
-    monaco,
-    type JsonSchemaRegistration
+    type JsonSchemaRegistration,
+    monaco
 } from "./monaco";
 
 interface WorkspaceEditorProps {
@@ -39,6 +51,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
     const editor = useRef<monaco.editor.IStandaloneCodeEditor>();
     const models = useRef(new Map<string, monaco.editor.ITextModel>());
     const savedContent = useRef(new Map<string, string>());
+    const moveInProgress = useRef(false);
     const activePathRef = useRef<string>();
     const saveActiveRef = useRef<() => void>(() => undefined);
     const [tree, setTree] = useState<WorkspaceTree>();
@@ -77,13 +90,15 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             body: content
         });
         if (!response.ok) {
-            const result = await response.json() as {error?: string};
+            const result = await response.json() as { error?: string };
             throw new Error(result.error ?? `Loot simulation failed (${response.status})`);
         }
         return response.json() as Promise<ChestSimulation>;
     }, [token]);
 
-    useEffect(() => { preloadItemAssets(token); }, [token]);
+    useEffect(() => {
+        preloadItemAssets(token);
+    }, [token]);
 
     useEffect(() => {
         let cancelled = false;
@@ -98,7 +113,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         request("/schema/tags")
             .then(response => response.json())
             .then(response => {
-                const result = response as {schemas?: JsonSchemaRegistration[]};
+                const result = response as { schemas?: JsonSchemaRegistration[] };
                 if (!cancelled) configureTagSchemas(result.schemas ?? []);
             })
             .catch(reason => {
@@ -107,7 +122,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         request("/schema/datapack")
             .then(response => response.json())
             .then(response => {
-                const result = response as {schemas?: JsonSchemaRegistration[]};
+                const result = response as { schemas?: JsonSchemaRegistration[] };
                 if (!cancelled) configureDataPackSchemas(result.schemas ?? []);
             })
             .catch(reason => {
@@ -154,12 +169,12 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
     const openFile = async (path: string, editable = true, source: "workspace" | "datapack" = "workspace") => {
         if (!editable) {
             setMessage("This file type is visible in the explorer but is not editable yet.");
-            return;
+            return false;
         }
         const key = source === "datapack" ? `${datapackPrefix}${path}` : path;
         if (models.current.has(key)) {
             activateFile(key);
-            return;
+            return true;
         }
 
         try {
@@ -172,8 +187,10 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             setOpenPaths(current => current.includes(key) ? current : [...current, key]);
             activateFile(key);
             setMessage(`Opened ${path}${source === "datapack" ? " (read only)" : ""}`);
+            return true;
         } catch (reason) {
             setMessage(errorMessage(reason));
+            return false;
         }
     };
 
@@ -361,24 +378,107 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         }
     };
 
-    const renameEntry = async (entry: WorkspaceEntry) => {
-        const target = window.prompt("Rename or move to", entry.path)?.trim();
-        if (!target || target === entry.path || !closePathAndChildren(entry.path)) {
+    const createAdvancement = async (path: string, content: string) => {
+        try {
+            if (findEntry(tree?.entries, path)) throw new Error(`Workspace file already exists: ${path}`);
+            const folders = path.split("/").slice(0, -1);
+            for (let index = 1; index <= folders.length; index++) {
+                const folder = folders.slice(0, index).join("/");
+                if (findEntry(tree?.entries, folder)?.type === "directory") continue;
+                try {
+                    await request(`/folder?path=${encodeURIComponent(folder)}`, {method: "POST"});
+                } catch (reason) {
+                    if (!errorMessage(reason).includes("already exists")) throw reason;
+                }
+            }
+            await request(`/file?path=${encodeURIComponent(path)}`, {method: "POST"});
+            await request(`/file?path=${encodeURIComponent(path)}`, {
+                method: "PUT", headers: {"Content-Type": "text/plain; charset=utf-8"}, body: content
+            });
+            for (let index = 1; index <= folders.length; index++) {
+                explorer.expand(folders.slice(0, index).join("/"));
+            }
+            const nextTree = await refreshTree();
+            if (!await openFile(path, true, "workspace")) {
+                throw new Error(`Advancement was created, but ${path} could not be opened.`);
+            }
+            const entry = findEntry(nextTree?.entries, path);
+            if (entry) revealEntry(entry);
+            setMessage(`Created advancement ${path}`);
+        } catch (reason) {
+            setMessage(errorMessage(reason));
+            throw reason;
+        }
+    };
+
+    const moveEntry = async (entry: WorkspaceEntry, target: string) => {
+        if (moveInProgress.current) return;
+        if (entrySource(entry) !== "workspace" || entry.readOnly || target === entry.path) return;
+        if (entry.type === "directory" && target.startsWith(`${entry.path}/`)) {
+            setMessage("A folder cannot be moved inside itself.");
             return;
         }
+        if (findEntry(tree?.entries, target)) {
+            setMessage(`Workspace entry already exists: ${target}`);
+            return;
+        }
+        const remap = (key: string) => key === entry.path ? target
+            : key.startsWith(`${entry.path}/`) ? `${target}${key.slice(entry.path.length)}` : key;
+        const affected = [...models.current.entries()].filter(([key]) => !isDatapackKey(key)
+            && (key === entry.path || key.startsWith(`${entry.path}/`)));
+        if (affected.some(([key]) => models.current.has(remap(key)) && !affected.some(([other]) => other === remap(key)))) {
+            setMessage("Close the file already open at the destination before moving this entry.");
+            return;
+        }
+        moveInProgress.current = true;
+        const replacements: Array<{
+            oldKey: string; newKey: string; oldModel: monaco.editor.ITextModel;
+            newModel: monaco.editor.ITextModel; saved?: string
+        }> = [];
         try {
+            for (const [key, model] of affected) replacements.push({
+                oldKey: key, newKey: remap(key), oldModel: model,
+                newModel: monaco.editor.createModel(model.getValue(), languageFor(remap(key)), modelUri(remap(key))),
+                saved: savedContent.current.get(key)
+            });
             await request(`/move?path=${encodeURIComponent(entry.path)}&target=${encodeURIComponent(target)}`, {
                 method: "POST"
             });
-            await refreshTree();
-            setSelectedPath(target);
-            if (entry.type === "file" && entry.editable) {
-                await openFile(target, true, "workspace");
+            for (const replacement of replacements) {
+                models.current.delete(replacement.oldKey);
+                savedContent.current.delete(replacement.oldKey);
+                models.current.set(replacement.newKey, replacement.newModel);
+                if (replacement.saved !== undefined) savedContent.current.set(replacement.newKey, replacement.saved);
             }
-            setMessage(`Moved ${entry.path} to ${target}`);
+            if (activePathRef.current && remap(activePathRef.current) !== activePathRef.current) {
+                const nextActive = remap(activePathRef.current);
+                activePathRef.current = nextActive;
+                setActivePath(nextActive);
+                editor.current?.setModel(models.current.get(nextActive) ?? null);
+            }
+            for (const replacement of replacements) replacement.oldModel.dispose();
+            setOpenPaths(current => current.map(remap));
+            setRevision(value => value + 1);
+            explorer.remap(entry.path, target);
+            const nextTree = await refreshTree();
+            setSelectedPath(target);
+            const moved = findEntry(nextTree?.entries, target);
+            if (moved) revealEntry(moved);
+            setMessage(nextTree ? `Moved ${entry.path} to ${target}` :
+                `Moved ${entry.path} to ${target}; refresh Explorer to see it.`);
         } catch (reason) {
+            for (const replacement of replacements) {
+                if (models.current.get(replacement.newKey) !== replacement.newModel) replacement.newModel.dispose();
+            }
             setMessage(errorMessage(reason));
+        } finally {
+            moveInProgress.current = false;
         }
+    };
+
+    const renameEntry = async (entry: WorkspaceEntry) => {
+        const target = window.prompt("Rename or move to", entry.path)?.trim();
+        if (target) await moveEntry(entry, target);
     };
 
     const deleteEntry = async (entry: WorkspaceEntry) => {
@@ -449,7 +549,19 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
 
     const activeReadOnly = Boolean(activePath && isDatapackKey(activePath));
     const activeDirty = activePath && !activeReadOnly ? isDirty(activePath) : false;
-    void revision;
+    const openAdvancements = useMemo(() => [...models.current.entries()]
+        .filter(([key]) => isAdvancementPath(displayPath(key)))
+        .map(([key, model]) => ({path: displayPath(key), content: model.getValue()})), [revision, openPaths]);
+    const activeDisplayPath = activePath ? displayPath(activePath) : undefined;
+    const showingAdvancements = isAdvancementPath(activeDisplayPath);
+    const replaceActiveContent = (content: string) => {
+        if (!activePath || activeReadOnly) return;
+        const model = models.current.get(activePath);
+        if (!model) return;
+        model.pushStackElement();
+        model.pushEditOperations([], [{range: model.getFullModelRange(), text: content}], () => null);
+        model.pushStackElement();
+    };
 
     return (
         <section class="workspace-editor flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#181818]">
@@ -469,6 +581,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                                            onOpen={entry => void openFile(entry.path, entry.editable !== false, entrySource(entry))}
                                            onContextMenu={showEntryMenu}
                                            onRename={entry => void renameEntry(entry)}
+                                           onMove={(entry, target) => void moveEntry(entry, target)}
                                            onDelete={entry => void deleteEntry(entry)}
                                            onCreate={type => void createEntry(type)}
                                            onRefresh={() => void refreshTree()}/>
@@ -519,7 +632,8 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                     ))}
                 </div>
 
-                <div class="flex h-8 shrink-0 items-center justify-between border-b border-white/5 px-3 text-xs text-zinc-500">
+                <div
+                    class="flex h-8 shrink-0 items-center justify-between border-b border-white/5 px-3 text-xs text-zinc-500">
                     <div class="flex min-w-0 items-center gap-2">
                         <span class="truncate">{activePath ? displayPath(activePath) : "No file open"}</span>
                         {activeReadOnly && <span
@@ -545,7 +659,8 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                     <div ref={editorHost} class="absolute inset-0"/>
                 </div>
 
-                <footer class="flex h-6 shrink-0 items-center justify-between gap-2 overflow-hidden whitespace-nowrap bg-violet-700 px-2 text-[11px] text-violet-50">
+                <footer
+                    class="flex h-6 shrink-0 items-center justify-between gap-2 overflow-hidden whitespace-nowrap bg-violet-700 px-2 text-[11px] text-violet-50">
                     <span class="max-w-[60%] truncate">{message}</span>
                     <div class="flex items-center gap-4">
                         <span>Ln {cursor.line}, Col {cursor.column}</span>
@@ -556,20 +671,22 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             </div>
 
             <PreviewPanel>
-                {isRecipePath(activePath ? displayPath(activePath) : undefined) &&
+                {!showingAdvancements && isRecipePath(activeDisplayPath) &&
                     <RecipePreview path={activePath ? displayPath(activePath) : undefined}
                                    content={activePath ? models.current.get(activePath)?.getValue() : undefined}
-                                   token={token} readOnly={activeReadOnly} onContentChange={content => {
-                        if (!activePath || activeReadOnly) return;
-                        const model = models.current.get(activePath);
-                        if (!model) return;
-                        model.pushStackElement();
-                        model.pushEditOperations([], [{range: model.getFullModelRange(), text: content}], () => null);
-                        model.pushStackElement();
-                    }}/>}
-                {isChestLootTablePath(activePath ? displayPath(activePath) : undefined) &&
+                                   token={token} readOnly={activeReadOnly} onContentChange={replaceActiveContent}/>}
+                {!showingAdvancements && isChestLootTablePath(activeDisplayPath) &&
                     <LootPreview content={activePath ? models.current.get(activePath)?.getValue() : undefined}
                                  token={token} simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>}
+                {showingAdvancements &&
+                    <AdvancementPreview path={activeDisplayPath}
+                                        token={token} workspace={tree} datapacks={datapacks}
+                                        openContents={openAdvancements}
+                                        savedRevision={simulationRevision} readOnly={activeReadOnly}
+                                        content={isAdvancementPath(activeDisplayPath) && activePath
+                                            ? models.current.get(activePath)?.getValue() : undefined}
+                                        onContentChange={replaceActiveContent} onCreate={createAdvancement}
+                                        onOpen={(path, source) => void openFile(path, true, source)}/>}
             </PreviewPanel>
 
             {contextMenu && (

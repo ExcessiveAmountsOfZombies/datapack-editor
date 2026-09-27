@@ -96,6 +96,6 @@ export function PreviewPanel({children}: PreviewPanelProps) {
                     onClick={toggle}>{open ? ">" : "<"}</button>
             {open && <span class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Visualizer</span>}
         </div>
-        {open && <div class="min-h-0 overflow-y-auto px-4 py-5 [container-type:inline-size]">{children}</div>}
+        {open && <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 [container-type:inline-size]">{children}</div>}
     </aside>;
 }

@@ -74,6 +74,16 @@ export function selectedDirectory(entries: WorkspaceEntry[] | undefined, selecte
     return selectedPath.slice(0, selectedPath.lastIndexOf("/"));
 }
 
+export function workspaceMoveTarget(entries: WorkspaceEntry[] | undefined, entry: WorkspaceEntry,
+                                    destination: string): string | undefined {
+    if (entrySource(entry) !== "workspace" || entry.readOnly) return undefined;
+    if (destination && findEntry(entries, destination)?.type !== "directory") return undefined;
+    if (entry.path === destination || destination.startsWith(`${entry.path}/`)) return undefined;
+    const target = destination ? `${destination}/${entry.name}` : entry.name;
+    if (target === entry.path || findEntry(entries, target)) return undefined;
+    return target;
+}
+
 export function toggleSet(current: Set<string>, path: string) {
     const next = new Set(current);
     if (next.has(path)) next.delete(path);

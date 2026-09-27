@@ -1,6 +1,10 @@
 package com.epherical.epherolib.editor;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
@@ -18,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -156,9 +161,31 @@ public class EditorAssets {
                                     String path, byte[] bytes) throws IOException {
         if (!bundlePath(path) || included.contains(path)) return;
         output.putNextEntry(new ZipEntry(path));
-        output.write(bytes);
+        output.write(adaptItemDefinition(path, bytes));
         output.closeEntry();
         included.add(path);
+    }
+
+    private static byte[] adaptItemDefinition(String path, byte[] bytes) {
+        if (!path.matches("assets/[^/]+/items/.+\\.json")) return bytes;
+        try {
+            JsonElement value = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8));
+            if (!value.isJsonObject()) return bytes;
+            JsonObject definition = value.getAsJsonObject();
+            JsonElement modelValue = definition.get("model");
+            if (modelValue == null || !modelValue.isJsonObject()) return bytes;
+            JsonObject model = modelValue.getAsJsonObject();
+            JsonElement type = model.get("type");
+            JsonElement baseModel = model.get("base_model");
+            if (type == null || !type.isJsonPrimitive() || !type.getAsJsonPrimitive().isString()
+                    || !"neoforge:trimmed_armor".equals(type.getAsString())
+                    || baseModel == null || !baseModel.isJsonObject()) return bytes;
+            // The browser renderer does not implement NeoForge's trim dispatcher.
+            definition.add("model", baseModel.deepCopy());
+            return GSON.toJson(definition).getBytes(StandardCharsets.UTF_8);
+        } catch (JsonParseException exception) {
+            return bytes;
+        }
     }
 
     private void readFile(Context context) {
@@ -176,7 +203,7 @@ public class EditorAssets {
             }
             context.header("Cache-Control", "private, max-age=300")
                     .contentType("application/octet-stream")
-                    .result(bytes);
+                    .result(adaptItemDefinition(path, bytes));
         } catch (IOException exception) {
             error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not read asset");
         }
@@ -206,7 +233,7 @@ public class EditorAssets {
                 if (bytes != null) {
                     context.header("Cache-Control", "private, max-age=300")
                             .contentType("application/octet-stream")
-                            .result(bytes);
+                            .result(adaptItemDefinition(path, bytes));
                     return;
                 }
             }
