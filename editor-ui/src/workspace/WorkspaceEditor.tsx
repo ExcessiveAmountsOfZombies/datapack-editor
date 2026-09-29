@@ -5,8 +5,8 @@ import {LootPreview} from "./preview/LootPreview";
 import {AdvancementPreview} from "./preview/AdvancementPreview";
 import {PreviewPanel} from "./preview/PreviewPanel";
 import {RecipePreview} from "./preview/RecipePreview";
-import {type ChestSimulation, isChestLootTablePath} from "./preview/lootTable";
-import {isRecipePath} from "./preview/recipe";
+import {type ChestSimulation, isChestLootTablePath, lootTableId} from "./preview/lootTable";
+import {isRecipePath} from "./preview/recipeDocument";
 import {preloadItemAssets} from "./preview/modelRenderer";
 import {isAdvancementPath} from "./preview/advancement";
 import {SearchGlyph, SearchView} from "./sidebar/SearchView";
@@ -84,7 +84,8 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
     };
 
     const simulateLoot = useCallback(async (content: string): Promise<ChestSimulation> => {
-        const response = await fetch(`${apiRoot}/chest-simulation`, {
+        const id = lootTableId(activePath);
+        const response = await fetch(`${apiRoot}/chest-simulation${id ? `?id=${encodeURIComponent(id)}` : ""}`, {
             method: "POST",
             headers: {"Authorization": `Bearer ${token}`, "Content-Type": "application/json"},
             body: content
@@ -94,7 +95,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             throw new Error(result.error ?? `Loot simulation failed (${response.status})`);
         }
         return response.json() as Promise<ChestSimulation>;
-    }, [token]);
+    }, [token, activePath]);
 
     useEffect(() => {
         preloadItemAssets(token);
@@ -603,7 +604,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                             key={path}
                             type="button"
                             onClick={() => activateFile(path)}
-                            class={`group flex min-w-[130px] max-w-[220px] items-center gap-2 border-r border-black/50 px-3 text-xs ${
+                            class={`group flex min-w-32.5 max-w-55 items-center gap-2 border-r border-black/50 px-3 text-xs ${
                                 activePath === path ? "border-t border-t-violet-400 bg-[#1e1e1e] text-white" : "text-zinc-400 hover:bg-[#202020]"
                             }`}
                         >
@@ -693,7 +694,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                 <div class="fixed inset-0 z-50" onClick={() => setContextMenu(undefined)}
                      onContextMenu={event => event.preventDefault()}>
                     <div role="menu" aria-label={`Actions for ${contextMenu.entry.name}`}
-                         class="fixed min-w-[220px] border border-white/15 bg-[#252526] py-1 shadow-2xl shadow-black/60"
+                         class="fixed min-w-55 border border-white/15 bg-[#252526] py-1 shadow-2xl shadow-black/60"
                          style={{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}}
                          onClick={event => event.stopPropagation()}>
                         {entrySource(contextMenu.entry) === "workspace" && contextMenu.entry.type === "directory" ? (

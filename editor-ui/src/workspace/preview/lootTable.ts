@@ -13,6 +13,11 @@ export function isChestLootTablePath(path: string | undefined): boolean {
     return Boolean(path && /(?:^|\/)data\/[^/]+\/loot_tables?\/.*\.json$/i.test(path));
 }
 
+export function lootTableId(path: string | undefined): string | undefined {
+    const match = path?.match(/(?:^|\/)data\/([^/]+)\/loot_tables?\/(.+)\.json$/);
+    return match ? `${match[1]}:${match[2]}` : undefined;
+}
+
 export function chestLootError(content: string): string | undefined {
     let table: unknown;
     try {

@@ -25,13 +25,15 @@ public class DataPackSchemaRegistration {
     private final String title;
     private final String description;
     private final List<Consumer<CodecJsonSchema.Builder>> schemaConfiguration;
+    private final List<String> fileMatches;
 
     public DataPackSchemaRegistration(Builder builder) {
         directory = builder.directory;
         codec = builder.codec;
         title = builder.title;
         description = builder.description;
-        schemaConfiguration = List.copyOf(builder.schemaConfiguration);
+        schemaConfiguration = builder.schemaConfiguration;
+        fileMatches = builder.fileMatches;
     }
 
     /**
@@ -63,6 +65,11 @@ public class DataPackSchemaRegistration {
      */
     public String directory() {
         return directory;
+    }
+
+    /** Explicit Monaco file patterns, or an empty list for the directory defaults. */
+    public List<String> fileMatches() {
+        return fileMatches;
     }
 
     /**
@@ -103,6 +110,7 @@ public class DataPackSchemaRegistration {
         private String title;
         private String description;
         private final List<Consumer<CodecJsonSchema.Builder>> schemaConfiguration = new ArrayList<>();
+        private List<String> fileMatches = List.of();
 
         public Builder(String directory, Codec<?> codec) {
             this.directory = Objects.requireNonNull(directory, "directory");
@@ -116,6 +124,18 @@ public class DataPackSchemaRegistration {
          */
         public Builder title(String title) {
             this.title = Objects.requireNonNull(title, "title");
+            return this;
+        }
+
+        /**
+         * Replaces directory matching for resources such as data maps whose schema
+         * belongs to one exact file. Patterns use Monaco's file URI glob syntax.
+         */
+        public Builder matchFiles(String... patterns) {
+            fileMatches = List.of(patterns);
+            if (fileMatches.isEmpty() || fileMatches.stream().anyMatch(String::isBlank)) {
+                throw new IllegalArgumentException("At least one nonblank file pattern is required");
+            }
             return this;
         }
 

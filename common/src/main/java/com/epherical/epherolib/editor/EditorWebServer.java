@@ -73,6 +73,8 @@ public class EditorWebServer {
                 new EditorAssets(server).registerRoutes(config);
                 new EditorLootSimulation(server).registerRoutes(config);
                 new EditorRecipeCatalog(server).registerRoutes(config);
+                new EditorIngredientPreview(server).registerRoutes(config);
+                new EditorRecipePreview(server).registerRoutes(config);
                 // todo; maybe add a visualizer for other loot table types...
                 // todo; add a visualizer for configured or placed features
                 // todo; biome visualizer?

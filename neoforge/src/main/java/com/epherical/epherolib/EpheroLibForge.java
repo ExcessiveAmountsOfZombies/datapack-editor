@@ -20,6 +20,7 @@ public class EpheroLibForge {
         mod = this;
         CommonPlatform.create(new ForgePlatform());
         ComponentSchemaRegister.register();
+        NeoForgeSchemas.register();
         NeoForge.EVENT_BUS.addListener(this::onCommandRegister);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         //FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientInit);

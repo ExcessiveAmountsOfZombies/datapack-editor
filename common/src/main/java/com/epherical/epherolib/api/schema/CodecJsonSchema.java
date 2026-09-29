@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Registers additions to the JSON schemas generated from DataFixerUpper codecs.
@@ -38,6 +39,23 @@ public class CodecJsonSchema {
     public static final Map<Object, CodecJsonSchemaImpl.RegistryOverride> REGISTRY_OVERRIDES = Collections.synchronizedMap(new IdentityHashMap<>());
     public static final Map<Object, SchemaProvider> PROVIDERS = Collections.synchronizedMap(new IdentityHashMap<>());
     public static final Map<Object, SchemaAdapter> ADAPTERS = Collections.synchronizedMap(new IdentityHashMap<>());
+    public static final List<SchemaInspector> INSPECTORS = new CopyOnWriteArrayList<>();
+
+    /**
+     * Adds inference for multiple codec instances created by the same factory or class, with different settings
+     * (This is really the HolderSetCodec). Inspectors run in
+     * registration order before built-in inference; return null to decline a codec.
+     * Exact instance registrations take precedence. Use context.definition for
+     * recursive families, and never request the same codec from its own inspector.
+     */
+    public static void registerInspector(SchemaInspector inspector) {
+        INSPECTORS.add(Objects.requireNonNull(inspector, "inspector"));
+    }
+
+    @FunctionalInterface
+    public interface SchemaInspector {
+        JsonElement inspect(SchemaContext context, Object codec);
+    }
 
 
     public static final String CODEC = "codec";

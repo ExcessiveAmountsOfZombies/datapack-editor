@@ -1,5 +1,6 @@
 package com.epherical.epherolib.editor;
 
+import com.epherical.epherolib.CommonPlatform;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
@@ -67,7 +68,11 @@ public class EditorLootSimulation {
 
     private void simulateChest(Context context) {
         JsonObject definition;
+        Identifier tableId;
         try {
+            String id = context.queryParam("id");
+            tableId = id == null ? Identifier.fromNamespaceAndPath("epherolib", "preview") : Identifier.tryParse(id);
+            if (tableId == null) throw new IllegalArgumentException("Invalid loot table ID");
             definition = JsonParser.parseString(context.body()).getAsJsonObject();
             JsonElement typeValue = definition.get(TYPE);
             String type = typeValue != null && typeValue.isJsonPrimitive()
@@ -87,7 +92,7 @@ public class EditorLootSimulation {
         }
 
         try {
-            JsonObject result = CompletableFuture.supplyAsync(() -> roll(definition), server)
+            JsonObject result = CompletableFuture.supplyAsync(() -> roll(definition, tableId), server)
                     .get(15, TimeUnit.SECONDS);
             context.header("Cache-Control", "no-store")
                     .contentType(CONTENT_TYPE)
@@ -108,10 +113,10 @@ public class EditorLootSimulation {
         }
     }
 
-    private JsonObject roll(JsonObject definition) {
+    private JsonObject roll(JsonObject definition, Identifier tableId) {
         var registries = server.reloadableRegistries().lookup();
         var ops = registries.createSerializationContext(JsonOps.INSTANCE);
-        LootTable table = LootTable.DIRECT_CODEC.parse(ops, definition).getOrThrow(JsonParseException::new);
+        LootTable table = CommonPlatform.platform.previewLootTable(server, tableId, definition);
         ServerLevel level = server.overworld();
         LootParams params = new LootParams.Builder(level)
                 .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(BlockPos.ZERO))

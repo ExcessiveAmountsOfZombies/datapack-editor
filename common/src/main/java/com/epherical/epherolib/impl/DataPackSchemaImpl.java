@@ -1,5 +1,6 @@
 package com.epherical.epherolib.impl;
 
+import com.epherical.epherolib.CommonPlatform;
 import com.epherical.epherolib.api.schema.CodecJsonSchema;
 import com.epherical.epherolib.api.schema.DataPackSchemaRegistration;
 import com.google.gson.Gson;
@@ -49,12 +50,21 @@ public class DataPackSchemaImpl {
         return GSON.toJson(buildResponse(registries));
     }
 
+    /** Resource directories registered by addons, excluding exact-file registrations. */
+    public static List<String> registeredDirectories() {
+        return REGISTERED_SCHEMAS.entrySet().stream()
+                .filter(entry -> entry.getValue().stream().allMatch(registration -> registration.fileMatches().isEmpty()))
+                .map(Map.Entry::getKey).sorted().toList();
+    }
+
     public static JsonObject buildResponse(RegistryAccess registries) {
         Map<String, JsonObject> registrations = new LinkedHashMap<>();
         registrations.put("advancement", advancementRegistration(registries));
-        RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(data -> addRegistry(registrations, registries, data));
+        datapackRegistries().forEach(data -> addRegistry(registrations, registries, data));
         RegistryDataLoader.DIMENSION_REGISTRIES.forEach(data -> addRegistry(registrations, registries, data));
         LootDataType.values().forEach(data -> addLootRegistry(registrations, registries, data));
+        if (CommonPlatform.platform != null) CommonPlatform.platform.datapackSchemas().forEach(registration ->
+                applyRegisteredSchema(registrations, registries, registration.directory(), List.of(registration)));
         REGISTERED_SCHEMAS.forEach((directory, registered) ->
                 applyRegisteredSchema(registrations, registries, directory, registered));
 
@@ -98,6 +108,7 @@ public class DataPackSchemaImpl {
                                      Codec<?> codec,
                                      ResourceKey<? extends Registry<?>> key) {
         CodecJsonSchema.Builder builder = CodecJsonSchemaImpl.builder(registries);
+        if (CommonPlatform.platform != null) CommonPlatform.platform.configureDatapackSchema(builder, codec);
         if (key.equals(Registries.TRIAL_SPAWNER_CONFIG)) {
             builder.register(CompoundTag.CODEC, trialSpawnerEntityTagSchema(registries));
         }
@@ -136,10 +147,12 @@ public class DataPackSchemaImpl {
         Codec<?> codec = null;
         String title = null;
         String description = null;
+        List<String> fileMatches = List.of();
         for (DataPackSchemaRegistration registration : registered) {
             if (registration.codec() != null) codec = registration.codec();
             if (registration.title() != null) title = registration.title();
             if (registration.description() != null) description = registration.description();
+            if (!registration.fileMatches().isEmpty()) fileMatches = registration.fileMatches();
             registration.configure(schemaBuilder);
         }
 
@@ -157,7 +170,15 @@ public class DataPackSchemaImpl {
         }
         if (title != null) schema.addProperty("title", title);
         if (description != null) schema.addProperty("description", description);
-        registrations.put(directory, registration(directory, schema, directory.equals("advancement")));
+        JsonObject result = registration(directory, schema, directory.equals("advancement"));
+        if (!fileMatches.isEmpty()) {
+            JsonArray matches = new JsonArray();
+            fileMatches.forEach(matches::add);
+            result.add("fileMatch", matches);
+        } else if (existing != null) {
+            result.add("fileMatch", existing.get("fileMatch").deepCopy());
+        }
+        registrations.put(directory, result);
     }
 
     private static JsonObject registration(String directory, JsonObject schema, boolean includeLegacyPlural) {
@@ -189,11 +210,16 @@ public class DataPackSchemaImpl {
 
     private static boolean isDefaultDirectory(String directory) {
         if (directory.equals("advancement")) return true;
-        return RegistryDataLoader.WORLDGEN_REGISTRIES.stream()
+        return datapackRegistries().stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
                 || RegistryDataLoader.DIMENSION_REGISTRIES.stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
                 || LootDataType.values()
                 .anyMatch(data -> Registries.elementsDirPath(data.registryKey()).equals(directory));
+    }
+
+    private static List<RegistryDataLoader.RegistryData<?>> datapackRegistries() {
+        return CommonPlatform.platform == null ? RegistryDataLoader.WORLDGEN_REGISTRIES
+                : CommonPlatform.platform.datapackRegistries();
     }
 }

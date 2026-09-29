@@ -1,5 +1,8 @@
 package com.epherical.epherolib.editor;
 
+import com.epherical.epherolib.impl.DataPackSchemaImpl;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.logging.LogUtils;
@@ -18,12 +21,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.stream.Stream;
 
 public class EditorDatapacks {
@@ -32,6 +30,21 @@ public class EditorDatapacks {
     private static final String ROOT_NAME = "Loaded Datapacks";
     private static final String DATA_DIRECTORY = "data";
     private static final String FORWARD_SLASH = "/";
+    private static final Set<String> EXTRA_DIRECTORIES = Sets.newHashSet();
+    private static final Set<Identifier> EXTRA_FILES = Sets.newHashSet();
+
+    public static void registerDirectory(String directory) {
+        if (directory == null || !directory.matches("[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*")
+                || Stream.of(directory.split("/")).anyMatch(segment -> segment.equals(".") || segment.equals(".."))) {
+            throw new IllegalArgumentException("Invalid datapack directory: " + directory);
+        }
+        EXTRA_DIRECTORIES.add(topLevelDirectory(directory));
+    }
+
+    public static void registerFile(Identifier file) {
+        if (!file.getPath().endsWith(".json")) throw new IllegalArgumentException("Expected a JSON resource");
+        EXTRA_FILES.add(file);
+    }
 
     private final Map<String, String> files;
     private final String treeJson;
@@ -52,6 +65,9 @@ public class EditorDatapacks {
         // stacks so every contributing pack remains visible
         for (String directory : dataDirectories) {
             scanDirectory(resourceManager, directory, root, files, filesByPack);
+        }
+        for (Identifier file : EXTRA_FILES) {
+            exposeResources(file, resourceManager.getResourceStack(file), root, files, filesByPack);
         }
         for (Map.Entry<String, Integer> entry : filesByPack.entrySet()) {
             LOGGER.info("Exposed {} JSON files from data pack {} to the editor",
@@ -84,8 +100,9 @@ public class EditorDatapacks {
         // Vanilla's optional built-in packs are stored below
         // data/minecraft/datapacks rather than a registry directory.
         directories.add("datapacks");
+        directories.addAll(EXTRA_DIRECTORIES);
+        DataPackSchemaImpl.registeredDirectories().forEach(directory -> directories.add(topLevelDirectory(directory)));
         LOGGER.info("Scanning {} data-pack directories for editor files", directories.size());
-        // todo; need to register the codecs that neoforge adds.
         return directories;
     }
 
@@ -101,23 +118,27 @@ public class EditorDatapacks {
             Map<Identifier, List<Resource>> stacks = resourceManager.listResourceStacks(
                     directory, identifier -> identifier.getPath().endsWith(".json"));
             for (Map.Entry<Identifier, List<Resource>> entry : stacks.entrySet()) {
-                Identifier identifier = entry.getKey();
-                for (Resource resource : entry.getValue()) {
-                    String packId = resource.sourcePackId();
-                    String virtualPath = String.join(FORWARD_SLASH, packId, DATA_DIRECTORY,
-                            identifier.getNamespace(), identifier.getPath());
-                    try (var input = resource.open()) {
-                        files.put(virtualPath, new String(input.readAllBytes(), StandardCharsets.UTF_8));
-                        addFile(root, packId, identifier, virtualPath);
-                        filesByPack.merge(packId, 1, Integer::sum);
-                    } catch (IOException exception) {
-                        LOGGER.warn("Could not expose data-pack JSON {} from {} to the editor",
-                                identifier, packId, exception);
-                    }
-                }
+                exposeResources(entry.getKey(), entry.getValue(), root, files, filesByPack);
             }
         } catch (RuntimeException exception) {
             LOGGER.warn("Could not enumerate data-pack directory {}", directory, exception);
+        }
+    }
+
+    private static void exposeResources(Identifier identifier, List<Resource> resources, TreeNode root,
+                                        Map<String, String> files, Map<String, Integer> filesByPack) {
+        for (Resource resource : resources) {
+            String packId = resource.sourcePackId();
+            String virtualPath = String.join(FORWARD_SLASH, packId, DATA_DIRECTORY,
+                    identifier.getNamespace(), identifier.getPath());
+            if (files.containsKey(virtualPath)) continue;
+            try (var input = resource.open()) {
+                files.put(virtualPath, new String(input.readAllBytes(), StandardCharsets.UTF_8));
+                addFile(root, packId, identifier, virtualPath);
+                filesByPack.merge(packId, 1, Integer::sum);
+            } catch (IOException exception) {
+                LOGGER.warn("Could not expose data-pack JSON {} from {} to the editor", identifier, packId, exception);
+            }
         }
     }
 

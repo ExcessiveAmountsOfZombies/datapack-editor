@@ -53,8 +53,10 @@ import com.epherical.epherolib.api.schema.CodecJsonSchema.Builder;
 import com.epherical.epherolib.api.schema.CodecJsonSchema.SchemaAdapter;
 import com.epherical.epherolib.api.schema.CodecJsonSchema.SchemaContext;
 import com.epherical.epherolib.api.schema.CodecJsonSchema.SchemaProvider;
+import com.epherical.epherolib.api.schema.CodecJsonSchema.SchemaInspector;
 
 import static com.epherical.epherolib.api.schema.CodecJsonSchema.ADAPTERS;
+import static com.epherical.epherolib.api.schema.CodecJsonSchema.INSPECTORS;
 import static com.epherical.epherolib.api.schema.CodecJsonSchema.OVERRIDES;
 import static com.epherical.epherolib.api.schema.CodecJsonSchema.PROVIDERS;
 import static com.epherical.epherolib.api.schema.CodecJsonSchema.REGISTRY_OVERRIDES;
@@ -244,6 +246,10 @@ public class CodecJsonSchemaImpl {
         }
 
         private JsonElement inferUncached(Object codec) {
+            for (SchemaInspector inspector : INSPECTORS) {
+                JsonElement inspected = inspector.inspect(new SchemaContext(this), codec);
+                if (inspected != null) return inspected;
+            }
             if (codec == Codec.BOOL) return type(BOOLEAN);
             if (codec == Codec.BYTE || codec == Codec.SHORT || codec == Codec.INT || codec == Codec.LONG) {
                 return type(INTEGER);
@@ -586,9 +592,26 @@ public class CodecJsonSchemaImpl {
                 default -> {
                 }
             }
+            int firstField = result.size();
             for (Object child : reflectionChildren(node, false)) {
                 if (child instanceof MapDecoder<?> || child instanceof Decoder<?> || isRecordBuilder(child)) {
                     collectRecordFields(child, result, seen, depth + 1);
+                }
+            }
+            // MapCodec.orElse wraps a required FieldDecoder, but accepts an absent
+            // field. Probe the containing map codec instead of relying on DFU's
+            // anonymous wrapper class names; this also covers mod fallback codecs.
+            if (node instanceof MapCodec<?> map && result.size() > firstField
+                    && result.subList(firstField, result.size()).stream().anyMatch(field -> !field.optional())) {
+                try {
+                    if (map.codec().parse(ops, new JsonObject()).isSuccess()) {
+                        for (int index = firstField; index < result.size(); index++) {
+                            RecordField field = result.get(index);
+                            result.set(index, new RecordField(field.name(), field.codec(), true));
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                    // A failed decode provides no evidence that the fields are optional.
                 }
             }
         }

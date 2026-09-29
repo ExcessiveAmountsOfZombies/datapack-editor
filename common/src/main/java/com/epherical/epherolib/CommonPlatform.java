@@ -1,8 +1,19 @@
 package com.epherical.epherolib;
 
-import net.minecraft.server.level.ServerPlayer;
+import com.epherical.epherolib.api.schema.DataPackSchemaRegistration;
+import com.epherical.epherolib.api.schema.CodecJsonSchema;
+import com.mojang.serialization.Codec;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryDataLoader;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.loot.LootTable;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * A way to abstract away platform specific code into something more generic for our root projects.
@@ -37,5 +48,31 @@ public abstract class CommonPlatform<T> {
      * @return A path to the config file.
      */
     public abstract Path getRootConfigPath();
+
+    /** Datapack registries actually loaded by this platform, including mod registries. */
+    public List<RegistryDataLoader.RegistryData<?>> datapackRegistries() {
+        return RegistryDataLoader.WORLDGEN_REGISTRIES;
+    }
+
+    /** Additional loader resources whose codecs or paths are discovered at runtime. */
+    public List<DataPackSchemaRegistration> datapackSchemas() {
+        return List.of();
+    }
+
+    public void configureDatapackSchema(CodecJsonSchema.Builder builder, Codec<?> codec) {
+    }
+
+    /** Decodes a preview table using this loader's conditions and table identity. */
+    public LootTable previewLootTable(MinecraftServer server, Identifier id, JsonElement definition) {
+        return LootTable.DIRECT_CODEC.parse(previewOps(server), definition).getOrThrow(JsonParseException::new);
+    }
+
+    public RegistryOps<JsonElement> previewOps(MinecraftServer server) {
+        return server.reloadableRegistries().lookup().createSerializationContext(JsonOps.INSTANCE);
+    }
+
+    public boolean previewConditionsMatch(MinecraftServer server, JsonElement definition) {
+        return true;
+    }
 
 }
