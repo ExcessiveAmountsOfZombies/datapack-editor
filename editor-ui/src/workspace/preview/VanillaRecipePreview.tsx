@@ -98,10 +98,10 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
         .filter(([, value]) => value != null && typeof value !== "string"));
     const ingredientKey = JSON.stringify({ingredients: complexIngredients, recipe: recipe ?? {}});
     const ingredientDisplays = resolved?.key === ingredientKey ? resolved.slots : {};
-    const hasComplexIngredients = Object.keys(complexIngredients).length > 0;
-    const ingredientStack = (slot: RecipeSlot) => {
+    const hasRotatingIngredients = Object.values(ingredientDisplays).some(display => display.items.length > 1);
+    const ingredientStack = (slot: RecipeSlot, offset = 0) => {
         const values = ingredientDisplays[slot]?.items ?? [];
-        return values.length ? values[tagFrame % values.length] : undefined;
+        return values.length ? values[(tagFrame + offset) % values.length] : undefined;
     };
     const hasTagSlots = slots.some(slot => recipe && slotItem(recipe, slot.id)?.startsWith("#"));
     const needsTags = hasTagSlots || Boolean(picker && pickerMode === "tags");
@@ -131,10 +131,12 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
         return () => { controller.abort(); window.clearTimeout(timeout); };
     }, [ingredientKey, token]);
 
-    const shownStacks = slots.map(slot => ingredientStack(slot.id)).filter((stack): stack is ChestStack => Boolean(stack));
+    const shownStacks = slots.flatMap(slot => [ingredientStack(slot.id), ingredientStack(slot.id, 1)])
+        .filter((stack): stack is ChestStack => Boolean(stack));
     const shownStackKey = JSON.stringify(shownStacks);
     useEffect(() => {
-        const missing = shownStacks.filter(stack => !ingredientIcons[JSON.stringify(stack)]);
+        const missing = [...new Map(shownStacks.map(stack => [JSON.stringify(stack), stack])).values()]
+            .filter(stack => !ingredientIcons[JSON.stringify(stack)]);
         if (!missing.length) return;
         let cancelled = false;
         void renderItemIcons(missing, token, (index, icon) => {
@@ -180,10 +182,10 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
     }, [needsTags, tags, token]);
 
     useEffect(() => {
-        if ((!needsTags || !tags) && !hasComplexIngredients) return;
+        if ((!needsTags || !tags) && !hasRotatingIngredients) return;
         const timer = window.setInterval(() => setTagFrame(frame => frame + 1), 1600);
         return () => window.clearInterval(timer);
-    }, [needsTags, tags, hasComplexIngredients]);
+    }, [needsTags, tags, hasRotatingIngredients]);
 
     useEffect(() => { if (picker) input.current?.focus(); }, [picker]);
     useEffect(() => { setPicker(undefined); }, [path]);
@@ -274,7 +276,10 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
                                        class="absolute flex items-center justify-center outline-none hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-violet-500"
                                        style={{left: `${(slot.x - 1) / 176 * 100}%`, top: `${(slot.y - 1) / 166 * 100}%`,
                                            width: `${18 / 176 * 100}%`, height: `${18 / 166 * 100}%`}}
-                                       onContextMenu={event => openPicker(event, slot.id)}
+                                       onContextMenu={event => {
+                                           event.preventDefault();
+                                           if (slotValue(recipe, slot.id) != null) put(slot.id, undefined);
+                                       }}
                                        onClick={event => openPicker(event, slot.id)}>
                             {icon ? <img src={icon} alt="" class="h-[90%] w-[90%] object-contain"/> :
                                 (id || complex) ? <span class="max-w-full truncate px-0.5 font-bold text-zinc-800">{id?.startsWith("#") ? "#" : "?"}</span> : null}
@@ -362,7 +367,7 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
                 {(pickerMode === "items" ? items.length > 0 : Boolean(tags)) && !filtered.length &&
                     <p class="mt-2 text-zinc-400">No matching {pickerMode}.</p>}
                 <div class="mt-2 flex justify-end border-t border-white/10 pt-2">
-                    {recipe && slotItem(recipe, picker.slot) && <button type="button" onClick={() => put(picker.slot, undefined)} class="mr-auto text-zinc-300 hover:text-white">Clear slot</button>}
+                    {recipe && slotValue(recipe, picker.slot) != null && <button type="button" onClick={() => put(picker.slot, undefined)} class="mr-auto text-zinc-300 hover:text-white">Clear slot</button>}
                     <button type="button" onClick={() => setPicker(undefined)} class="text-zinc-300 hover:text-white">Close</button>
                 </div>
             </div>

@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 public class EditorIngredientPreview {
     private final MinecraftServer server;
@@ -66,9 +67,10 @@ public class EditorIngredientPreview {
             JsonObject result = new JsonObject();
             try {
                 Ingredient ingredient = Ingredient.CODEC.parse(ops, entry.getValue()).getOrThrow(JsonParseException::new);
-                JsonArray stacks = resolveDisplay(ingredient.display());
+                JsonArray stacks = encodeStacks(displayStacks(ingredient.display())
+                        .filter(ingredient::test), true);
                 result.add("items", stacks);
-                if (stacks.isEmpty()) result.addProperty("warning", "This ingredient has no display items in the running server");
+                if (stacks.isEmpty()) result.addProperty("warning", "This ingredient has no matching display items in the running server");
             } catch (RuntimeException exception) {
                 result.add("items", new JsonArray());
                 result.addProperty("error", exception.getMessage() == null ? "Ingredient display unavailable" : exception.getMessage());
@@ -79,18 +81,30 @@ public class EditorIngredientPreview {
     }
 
     public JsonArray resolveDisplay(SlotDisplay display) {
+        return encodeStacks(displayStacks(display), false);
+    }
+
+    private Stream<ItemStack> displayStacks(SlotDisplay display) {
         var displayBuilder = new ContextMap.Builder().withParameter(SlotDisplayContext.REGISTRIES, server.registryAccess());
         if (server.fuelValues() != null) displayBuilder.withParameter(SlotDisplayContext.FUEL_VALUES, server.fuelValues());
         var displayContext = displayBuilder.create(SlotDisplayContext.CONTEXT);
+        return display.resolve(displayContext, SlotDisplay.ItemStackContentsFactory.INSTANCE)
+                .filter(stack -> !stack.isEmpty());
+    }
+
+    private JsonArray encodeStacks(Stream<ItemStack> stacks, boolean distinct) {
         var ops = CommonPlatform.platform.previewOps(server);
-        JsonArray stacks = new JsonArray();
-        display.resolve(displayContext, SlotDisplay.ItemStackContentsFactory.INSTANCE)
-                .filter(stack -> !stack.isEmpty()).limit(128).forEach(stack -> {
-                    JsonObject encoded = ItemStack.CODEC.encodeStart(ops, stack).getOrThrow().getAsJsonObject();
-                    encoded.addProperty("count", stack.getCount());
-                    stacks.add(encoded);
-                });
-        return stacks;
+        Stream<JsonObject> encoded = stacks.map(stack -> {
+            JsonObject value = ItemStack.CODEC.encodeStart(ops, stack).getOrThrow().getAsJsonObject();
+            value.addProperty("count", stack.getCount());
+            return value;
+        });
+        // Gson compares object values structurally, including count and components.
+        // Deduplicate before the cap so repeated intersection candidates do not crowd out alternatives.
+        if (distinct) encoded = encoded.distinct();
+        JsonArray result = new JsonArray();
+        encoded.limit(128).forEach(result::add);
+        return result;
     }
 
     private void error(Context context, HttpStatus status, String message) {
