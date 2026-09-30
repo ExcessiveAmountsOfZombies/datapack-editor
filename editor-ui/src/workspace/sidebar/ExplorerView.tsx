@@ -126,6 +126,9 @@ export function ExplorerView(props: ExplorerViewProps) {
             </div>
             <div class="min-h-0 flex-1 overflow-auto text-[13px]">
                 <ExplorerSection title={props.tree?.root ?? "Workspace"} open={props.workspaceSectionOpen}
+                                 onContextMenu={event => props.onContextMenu(event, {
+                                     name: props.tree?.root ?? "Workspace", path: "", type: "directory", source: "workspace"
+                                 })}
                                  onToggle={props.onWorkspaceSectionToggle} dropActive={dropTarget === ""}
                                  onDragOver={event => {
                                      if (!dragged || !targetFor(dragged, "")) return;
@@ -249,7 +252,8 @@ function TreeRow(props: TreeRowProps) {
 function ExplorerSection(props: {
     title: string; detail?: string; open: boolean; onToggle: () => void;
     children?: ComponentChildren; dropActive?: boolean; onDragOver?: (event: DragEvent) => void;
-    onDragLeave?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void
+    onDragLeave?: (event: DragEvent) => void; onDrop?: (event: DragEvent) => void;
+    onContextMenu?: (event: MouseEvent) => void
 }) {
     return (
         <section>
@@ -257,7 +261,7 @@ function ExplorerSection(props: {
                     class={`sticky top-0 z-10 flex h-7 w-full items-center border-y px-2 text-left text-[11px] font-bold uppercase tracking-wide hover:bg-[#252525] ${props.dropActive
                         ? "border-violet-400 bg-violet-600/40 text-white" : "border-white/5 bg-[#1f1f1f] text-zinc-200"}`}
                     onDragOver={props.onDragOver} onDragLeave={props.onDragLeave} onDrop={props.onDrop}
-                    onClick={props.onToggle} aria-expanded={props.open}>
+                    onClick={props.onToggle} onContextMenu={props.onContextMenu} aria-expanded={props.open}>
                 <span class="mr-1 text-[9px]">{props.open ? "▼" : "▶"}</span>
                 <span class="min-w-0 flex-1 truncate">{props.title}</span>
                 {props.detail && <span class="ml-2 font-normal text-zinc-500">{props.detail}</span>}

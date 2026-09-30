@@ -362,8 +362,10 @@ export function WorkspaceEditor() {
         try {
             await request(`/${type}?path=${encodeURIComponent(path)}`, {method: "POST"});
             explorer.expand(parent);
-            await refreshTree();
-            setSelectedPath(path);
+            const nextTree = await refreshTree();
+            const created = findEntry(nextTree?.entries, path);
+            if (created) revealEntry(created);
+            else setSelectedPath(path);
             if (type === "file") {
                 await openFile(path, true, "workspace");
             }
@@ -692,15 +694,26 @@ export function WorkspaceEditor() {
                          style={{left: `${contextMenu.x}px`, top: `${contextMenu.y}px`}}
                          onClick={event => event.stopPropagation()}>
                         {entrySource(contextMenu.entry) === "workspace" && contextMenu.entry.type === "directory" ? (
-                            <button type="button" role="menuitem"
-                                    class="flex w-full px-3 py-2 text-left text-xs text-zinc-200 hover:bg-violet-600 hover:text-white"
-                                    onClick={() => {
-                                        const folder = contextMenu.entry.path;
-                                        setContextMenu(undefined);
-                                        void createEntry("file", folder);
-                                    }}>
-                                New File…
-                            </button>
+                            <>
+                                <button type="button" role="menuitem"
+                                        class="flex w-full px-3 py-2 text-left text-xs text-zinc-200 hover:bg-violet-600 hover:text-white"
+                                        onClick={() => {
+                                            const folder = contextMenu.entry.path;
+                                            setContextMenu(undefined);
+                                            void createEntry("file", folder);
+                                        }}>
+                                    New File…
+                                </button>
+                                <button type="button" role="menuitem"
+                                        class="flex w-full px-3 py-2 text-left text-xs text-zinc-200 hover:bg-violet-600 hover:text-white"
+                                        onClick={() => {
+                                            const folder = contextMenu.entry.path;
+                                            setContextMenu(undefined);
+                                            void createEntry("folder", folder);
+                                        }}>
+                                    New Folder…
+                                </button>
+                            </>
                         ) : (
                             <button type="button" role="menuitem"
                                     class="flex w-full flex-col px-3 py-2 text-left text-xs text-zinc-200 hover:bg-violet-600 hover:text-white"
