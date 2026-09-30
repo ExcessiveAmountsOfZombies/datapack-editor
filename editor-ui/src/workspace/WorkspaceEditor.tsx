@@ -1,6 +1,8 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "preact/hooks";
 import {ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
-import {ExplorerIcon, FileGlyph, ReadOnlyIcon, SearchIcon, TabCloseIcon} from "./Codicon";
+import {CloseIcon, ExplorerIcon, FileGlyph, NotificationIcon, ReadOnlyIcon, SearchIcon, TabCloseIcon} from "./Codicon";
+import {ExportDatapackDialog, type DatapackExportSettings} from "./ExportDatapackDialog";
+import {createNotificationService, type WorkspaceNotification} from "./notifications";
 import {LootPreview} from "./preview/LootPreview";
 import {AdvancementPreview} from "./preview/AdvancementPreview";
 import {PreviewPanel} from "./preview/PreviewPanel";
@@ -30,6 +32,7 @@ import {
     configureDataPackSchemas,
     configureRecipeSchema,
     configureTagSchemas,
+    registerWorkspaceCompletions,
     type JsonSchemaRegistration,
     monaco
 } from "./monaco";
@@ -55,6 +58,9 @@ export function WorkspaceEditor() {
     const [sidebar, setSidebar] = useState<string | null>("explorer");
     const explorer = useExplorerState(sidebar === "explorer");
     const [contextMenu, setContextMenu] = useState<ExplorerContextMenu>();
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [notification, setNotification] = useState<WorkspaceNotification>();
+    const notifications = useRef(createNotificationService(setNotification));
     const [selectedPath, setSelectedPath] = useState<string>();
     const [openPaths, setOpenPaths] = useState<string[]>([]);
     const [activePath, setActivePath] = useState<string>();
@@ -210,8 +216,33 @@ export function WorkspaceEditor() {
         setContextMenu({
             entry,
             x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)),
-            y: Math.max(8, Math.min(event.clientY, window.innerHeight - 86))
+            y: Math.max(8, Math.min(event.clientY, window.innerHeight - (entry.path === "" ? 125 : 86)))
         });
+    };
+
+    const dirtyWorkspacePaths = () => [...models.current.keys()].filter(path => !isDatapackKey(path) && isDirty(path));
+
+    const exportDatapack = async (settings: DatapackExportSettings, saveAll: boolean) => {
+        const dirtyPaths = dirtyWorkspacePaths();
+        if (dirtyPaths.length > 0 && !saveAll) throw new Error("Save unsaved workspace changes before exporting.");
+        for (const path of dirtyPaths) {
+            try {
+                await persistFile(path);
+            } catch (reason) {
+                throw new Error(`Could not save ${path}: ${errorMessage(reason)}`);
+            }
+        }
+        if (dirtyWorkspacePaths().length > 0) throw new Error("Workspace changes are still unsaved. Save All and Export again.");
+        const response = await request("/export-datapack", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(settings)
+        });
+        const result = await response.json() as {path: string};
+        setExportDialogOpen(false);
+        const message = `Datapack exported to ${result.path}`;
+        setMessage(message);
+        notifications.current.info(message);
     };
 
     const createDatapackOverride = async (entry: WorkspaceEntry) => {
@@ -258,27 +289,30 @@ export function WorkspaceEditor() {
         return Boolean(model && model.getValue() !== savedContent.current.get(path));
     };
 
-    const saveFile = async (path: string) => {
+    const persistFile = async (path: string) => {
         if (isDatapackKey(path)) {
-            setMessage("Built-in data-pack files are read only. Copy one into the workspace to edit it.");
-            return;
+            throw new Error("Built-in data-pack files are read only. Copy one into the workspace to edit it.");
         }
         const model = models.current.get(path);
         if (!model) {
             return;
         }
+        const content = model.getValue();
+        setMessage(`Saving ${path}…`);
+        await request(`/file?path=${encodeURIComponent(path)}`, {
+            method: "PUT",
+            headers: {"Content-Type": "text/plain; charset=utf-8"},
+            body: content
+        });
+        savedContent.current.set(path, content);
+        setRevision(value => value + 1);
+        setSimulationRevision(value => value + 1);
+        setMessage(`Saved ${path}`);
+    };
+
+    const saveFile = async (path: string) => {
         try {
-            const content = model.getValue();
-            setMessage(`Saving ${path}…`);
-            await request(`/file?path=${encodeURIComponent(path)}`, {
-                method: "PUT",
-                headers: {"Content-Type": "text/plain; charset=utf-8"},
-                body: content
-            });
-            savedContent.current.set(path, content);
-            setRevision(value => value + 1);
-            setSimulationRevision(value => value + 1);
-            setMessage(`Saved ${path}`);
+            await persistFile(path);
         } catch (reason) {
             setMessage(errorMessage(reason));
         }
@@ -511,7 +545,8 @@ export function WorkspaceEditor() {
             scrollBeyondLastLine: false,
             smoothScrolling: true,
             tabSize: 2
-        });
+        }, {notificationService: notifications.current});
+        registerWorkspaceCompletions();
         editor.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveActiveRef.current());
         const modelListener = editor.current.onDidChangeModel(() => editor.current?.updateOptions({
             extraEditorClassName: editor.current.getModel()?.getLanguageId() === "json" ? "epherolib-json-editor" : ""
@@ -714,6 +749,15 @@ export function WorkspaceEditor() {
                                         }}>
                                     New Folder…
                                 </button>
+                                {contextMenu.entry.path === "" && <>
+                                    <div class="my-1 border-t border-white/10"/>
+                                    <button type="button" role="menuitem"
+                                            class="flex w-full px-3 py-2 text-left text-xs text-zinc-200 hover:bg-violet-600 hover:text-white"
+                                            onClick={() => {
+                                                setContextMenu(undefined);
+                                                setExportDialogOpen(true);
+                                            }}>Export Datapack</button>
+                                </>}
                             </>
                         ) : (
                             <button type="button" role="menuitem"
@@ -733,6 +777,15 @@ export function WorkspaceEditor() {
                     </div>
                 </div>
             )}
+            {exportDialogOpen && <ExportDatapackDialog unsavedPaths={dirtyWorkspacePaths()} onExport={exportDatapack}
+                                                      onCancel={() => setExportDialogOpen(false)}/>}
+            {notification && <div role={notification.severity === 3 ? "alert" : "status"}
+                                  class="fixed bottom-9 right-4 z-50 flex w-[min(480px,calc(100vw-32px))] items-start gap-3 border border-white/15 bg-[#252526] p-4 text-xs text-zinc-100 shadow-2xl">
+                <NotificationIcon error={notification.severity === 3}/>
+                <p class="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word select-text">{notification.message}</p>
+                <button type="button" aria-label="Dismiss notification" onClick={() => setNotification(undefined)}
+                        class="pt-1 pb-1 px-1 hover:bg-white/10"><CloseIcon/></button>
+            </div>}
         </section>
     );
 }

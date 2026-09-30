@@ -1,6 +1,6 @@
 type CodiconName = "add" | "chevron-down" | "chevron-right" | "circle-filled" | "close" |
     "edit" | "eye" | "file" | "file-code" | "files" | "folder" | "folder-opened" | "json" |
-    "lock" | "refresh" | "search" | "trash";
+    "lock" | "refresh" | "search" | "trash" | "info" | "error";
 
 function Codicon({name, size = 16, class: className = ""}: {
     name: CodiconName;
@@ -49,6 +49,14 @@ export function ReadOnlyIcon() {
 
 export function TabCloseIcon({dirty}: {dirty: boolean}) {
     return <Codicon name={dirty ? "circle-filled" : "close"} size={dirty ? 10 : 16}/>;
+}
+
+export function CloseIcon() {
+    return <Codicon name="close"/>;
+}
+
+export function NotificationIcon({error}: {error: boolean}) {
+    return <Codicon name={error ? "error" : "info"} class={error ? "text-red-400" : "text-sky-400"}/>;
 }
 
 export function AddChildIcon() {

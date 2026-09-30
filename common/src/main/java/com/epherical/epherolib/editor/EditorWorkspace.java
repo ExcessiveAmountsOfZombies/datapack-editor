@@ -1,5 +1,9 @@
 package com.epherical.epherolib.editor;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
@@ -65,6 +69,7 @@ public class EditorWorkspace {
         config.routes.post("/api/file", EditorWorkspace::createFile);
         config.routes.post("/api/folder", EditorWorkspace::createFolder);
         config.routes.post("/api/move", EditorWorkspace::moveEntry);
+        config.routes.post("/api/export-datapack", EditorWorkspace::exportDatapack);
         config.routes.delete("/api/entry", EditorWorkspace::deleteEntry);
     }
 
@@ -177,6 +182,44 @@ public class EditorWorkspace {
             Files.move(source, target);
             success(context, "moved", relativePath(target));
         });
+    }
+
+    private static synchronized void exportDatapack(Context context) {
+        handle(context, () -> {
+            JsonObject request;
+            try {
+                JsonElement parsed = JsonParser.parseString(context.body());
+                if (!parsed.isJsonObject()) throw new WorkspaceException("Export settings must be a JSON object");
+                request = parsed.getAsJsonObject();
+            } catch (JsonParseException exception) {
+                throw new WorkspaceException("Export settings must be valid JSON");
+            }
+            String name = requiredString(request, "name");
+            String description = requiredString(request, "description");
+            if (request.has("files")) {
+                throw new WorkspaceException("Export uses saved workspace files. Save changes before exporting.");
+            }
+            Path exported;
+            try {
+                exported = EditorDatapackExport.export(ROOT, name, description);
+            } catch (InvalidPathException exception) {
+                throw new WorkspaceException("The computer cannot use that ZIP filename: " + exception.getMessage());
+            } catch (IOException exception) {
+                error(context, HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Could not create the datapack ZIP: " + exception.getMessage());
+                return;
+            }
+            context.status(HttpStatus.CREATED);
+            success(context, "exported", exported.toString());
+        });
+    }
+
+    private static String requiredString(JsonObject object, String key) {
+        JsonElement value = object.get(key);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new WorkspaceException("Missing or invalid export field: " + key);
+        }
+        return value.getAsString();
     }
 
     private static synchronized void deleteEntry(Context context) {

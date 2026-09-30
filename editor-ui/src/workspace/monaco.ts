@@ -26,30 +26,36 @@ jsonDefaults.setModeConfiguration({...jsonDefaults.modeConfiguration, completion
 const jsonWorker = async (uri: monaco.Uri) => (await getWorker())(uri);
 const completionAdapter = new CompletionAdapter(jsonWorker, [" ", ":", '"']);
 
-monaco.languages.registerCompletionItemProvider("json", {
-  triggerCharacters: completionAdapter.triggerCharacters,
-  async provideCompletionItems(model, position, context, token) {
-    const completions = await completionAdapter.provideCompletionItems(model, position, context, token);
-    if (!completions || token.isCancellationRequested) return completions;
+let completionsRegistered = false;
 
-    try {
-      const worker = await jsonWorker(model.uri);
-      const matches = await worker.getMatchingSchemas(model.uri.toString());
-      const keys = schemaKeysAtPosition(matches, model.getOffsetAt(position));
-      for (const suggestion of completions.suggestions) {
-        const label = typeof suggestion.label === "string" ? suggestion.label : suggestion.label.label;
-        if (suggestion.kind === monaco.languages.CompletionItemKind.Property && keys.has(label)) {
-          suggestion.kind = monaco.languages.CompletionItemKind.Field;
-          suggestion.label = {label, description: "Schema key"};
+export function registerWorkspaceCompletions() {
+  if (completionsRegistered) return;
+  completionsRegistered = true;
+  monaco.languages.registerCompletionItemProvider("json", {
+    triggerCharacters: completionAdapter.triggerCharacters,
+    async provideCompletionItems(model, position, context, token) {
+      const completions = await completionAdapter.provideCompletionItems(model, position, context, token);
+      if (!completions || token.isCancellationRequested) return completions;
+
+      try {
+        const worker = await jsonWorker(model.uri);
+        const matches = await worker.getMatchingSchemas(model.uri.toString());
+        const keys = schemaKeysAtPosition(matches, model.getOffsetAt(position));
+        for (const suggestion of completions.suggestions) {
+          const label = typeof suggestion.label === "string" ? suggestion.label : suggestion.label.label;
+          if (suggestion.kind === monaco.languages.CompletionItemKind.Property && keys.has(label)) {
+            suggestion.kind = monaco.languages.CompletionItemKind.Field;
+            suggestion.label = {label, description: "Schema key"};
+          }
         }
+      } catch {
+        // Keep Monaco's original completions if schema inspection is unavailable.
       }
-    } catch {
-      // Keep Monaco's original completions if schema inspection is unavailable.
-    }
 
-    return completions;
-  }
-});
+      return completions;
+    }
+  });
+}
 
 function schemaKeysAtPosition(matches: MatchingSchema[], offset: number): Set<string> {
   const objects = matches.filter(match =>
