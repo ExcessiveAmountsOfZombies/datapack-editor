@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "preact/hooks";
-import {ExplorerGlyph, ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
-import {FileGlyph} from "./FileGlyph";
+import {ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
+import {ExplorerIcon, FileGlyph, ReadOnlyIcon, SearchIcon, TabCloseIcon} from "./Codicon";
 import {LootPreview} from "./preview/LootPreview";
 import {AdvancementPreview} from "./preview/AdvancementPreview";
 import {PreviewPanel} from "./preview/PreviewPanel";
@@ -9,7 +9,7 @@ import {type ChestSimulation, isChestLootTablePath, lootTableId} from "./preview
 import {isRecipePath} from "./preview/recipeDocument";
 import {preloadItemAssets} from "./preview/modelRenderer";
 import {isAdvancementPath} from "./preview/advancement";
-import {SearchGlyph, SearchView} from "./sidebar/SearchView";
+import {SearchView} from "./sidebar/SearchView";
 import {Sidebar} from "./sidebar/Sidebar";
 import {
     countEntries,
@@ -566,7 +566,7 @@ export function WorkspaceEditor() {
                 {
                     id: "explorer",
                     label: "Explorer",
-                    icon: <ExplorerGlyph/>,
+                    icon: <ExplorerIcon/>,
                     content: <ExplorerView tree={tree} datapacks={datapacks} expanded={explorer.expanded}
                                            selectedPath={selectedPath} revealedPath={explorer.revealedPath}
                                            workspaceSectionOpen={explorer.workspaceSectionOpen}
@@ -586,7 +586,7 @@ export function WorkspaceEditor() {
                 {
                     id: "search",
                     label: "Search JSON files",
-                    icon: <SearchGlyph/>,
+                    icon: <SearchIcon/>,
                     content: <SearchView tree={tree} datapacks={datapacks} active={sidebar === "search"}
                                          selectedPath={selectedPath} onOpen={openSearchResult}
                                          onContextMenu={showEntryMenu}/>
@@ -606,11 +606,12 @@ export function WorkspaceEditor() {
                         >
                             <FileGlyph path={displayPath(path)}/>
                             <span class="min-w-0 flex-1 truncate text-left">{fileName(displayPath(path))}</span>
-                            {isDatapackKey(path) && <span class="text-[9px] text-zinc-500" title="Read only">R</span>}
+                            {isDatapackKey(path) && <span class="inline-flex text-zinc-500" title="Read only" aria-label="Read only"><ReadOnlyIcon/></span>}
                             <span
                                 role="button"
                                 tabIndex={0}
                                 title={`Close ${displayPath(path)}`}
+                                aria-label={`Close ${displayPath(path)}`}
                                 onClick={event => {
                                     event.stopPropagation();
                                     closeFile(path);
@@ -623,7 +624,7 @@ export function WorkspaceEditor() {
                                 }}
                                 class="flex h-5 w-5 items-center justify-center rounded hover:bg-white/10"
                             >
-                                {isDirty(path) ? "●" : "×"}
+                                <TabCloseIcon dirty={isDirty(path)}/>
                             </span>
                         </button>
                     ))}

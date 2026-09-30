@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from "preact/hooks";
+import {AddChildIcon} from "../Codicon";
 import {collectJsonFiles, type WorkspaceTree} from "../model";
 import {AdvancementDetails, NewAdvancementForm} from "./AdvancementEditor";
 import {advancementCompletions} from "./advancementSuggestions";
@@ -328,7 +329,7 @@ export function AdvancementPreview({
                             event.stopPropagation();
                             setSelectedNode(node.id);
                             setCreation({kind: "child", parentId: node.id});
-                        }}>+
+                        }}><AddChildIcon/>
                         <span class="pointer-events-none absolute bottom-full left-1/2 mb-1 hidden w-max max-w-48 -translate-x-1/2 rounded bg-[#171717] px-2 py-1 text-[10px] font-normal text-white shadow-lg group-hover:block group-focus-visible:block">
                             Add child advancement to {label(node)}
                         </span>

@@ -1,6 +1,6 @@
 import type {ComponentChildren} from "preact";
 import {useEffect, useRef, useState} from "preact/hooks";
-import {FileGlyph} from "../FileGlyph";
+import {ChevronIcon, DeleteIcon, FileGlyph, FolderIcon, RefreshIcon, RenameIcon} from "../Codicon";
 import {
     ancestorKeys,
     entryKey,
@@ -119,7 +119,7 @@ export function ExplorerView(props: ExplorerViewProps) {
                 class="flex h-11 items-center justify-between px-4 text-[11px] font-medium uppercase tracking-wide text-zinc-300">
                 <span>Explorer</span>
                 <div class="flex items-center gap-0.5">
-                    <ToolButton label="Refresh" onClick={props.onRefresh}>↻</ToolButton>
+                    <ToolButton label="Refresh" onClick={props.onRefresh}><RefreshIcon/></ToolButton>
                 </div>
             </div>
             <div class="min-h-0 flex-1 overflow-auto text-[13px]">
@@ -226,17 +226,17 @@ function TreeRow(props: TreeRowProps) {
                      props.onSelect(key);
                      props.onContextMenu(event, entry);
                  }}>
-                <span class="mr-1 inline-flex w-3 shrink-0 justify-center text-[9px] text-zinc-500">
-                    {isDirectory ? (isExpanded ? "▼" : "▶") : ""}
+                <span class="mr-1 inline-flex w-3 shrink-0 justify-center text-zinc-500">
+                    {isDirectory && <ChevronIcon open={isExpanded}/>}
                 </span>
-                {isDirectory ? <FolderGlyph open={isExpanded}/> : <FileGlyph path={entry.path}/>}
+                {isDirectory ? <FolderIcon open={isExpanded}/> : <FileGlyph path={entry.path}/>}
                 <span class={`ml-1.5 min-w-0 flex-1 truncate ${entry.editable === false ? "opacity-50" : ""}`}>
                     {entry.name}
                 </span>
                 {!entry.readOnly && (
                     <span class="hidden items-center gap-0.5 group-hover:flex">
-                        <RowAction label="Rename" onClick={() => props.onRename(entry)}>R</RowAction>
-                        <RowAction label="Delete" onClick={() => props.onDelete(entry)}>×</RowAction>
+                        <RowAction label="Rename" onClick={() => props.onRename(entry)}><RenameIcon/></RowAction>
+                        <RowAction label="Delete" onClick={() => props.onDelete(entry)}><DeleteIcon/></RowAction>
                     </span>
                 )}
             </div>
@@ -260,8 +260,9 @@ function ExplorerSection(props: {
                         ? "border-violet-400 bg-violet-600/40 text-white" : "border-white/5 bg-[#1f1f1f] text-zinc-200"}`}
                     onDragOver={props.onDragOver} onDragLeave={props.onDragLeave} onDrop={props.onDrop}
                     onClick={props.onToggle} onContextMenu={props.onContextMenu} aria-expanded={props.open}>
-                <span class="mr-1 text-[9px]">{props.open ? "▼" : "▶"}</span>
-                <span class="min-w-0 flex-1 truncate">{props.title}</span>
+                <ChevronIcon open={props.open} class="mr-1"/>
+                <FolderIcon open={props.open}/>
+                <span class="ml-1.5 min-w-0 flex-1 truncate">{props.title}</span>
                 {props.detail && <span class="ml-2 font-normal text-zinc-500">{props.detail}</span>}
             </button>
             {props.open && <div class="py-1">{props.children}</div>}
@@ -269,18 +270,18 @@ function ExplorerSection(props: {
     );
 }
 
-function ToolButton(props: { label: string; onClick: () => void; children: string }) {
+function ToolButton(props: { label: string; onClick: () => void; children: ComponentChildren }) {
     return (
-        <button type="button" title={props.label} onClick={props.onClick}
-                class="h-6 rounded px-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-white">
+        <button type="button" title={props.label} aria-label={props.label} onClick={props.onClick}
+                class="flex h-6 items-center justify-center rounded px-1 text-zinc-400 hover:bg-white/10 hover:text-white">
             {props.children}
         </button>
     );
 }
 
-function RowAction(props: { label: string; onClick: () => void; children: string }) {
+function RowAction(props: { label: string; onClick: () => void; children: ComponentChildren }) {
     return (
-        <button type="button" title={props.label}
+        <button type="button" title={props.label} aria-label={props.label}
                 onClick={event => {
                     event.stopPropagation();
                     props.onClick();
@@ -288,24 +289,5 @@ function RowAction(props: { label: string; onClick: () => void; children: string
                 class="flex h-5 w-5 items-center justify-center rounded text-[10px] text-zinc-400 hover:bg-white/10 hover:text-white">
             {props.children}
         </button>
-    );
-}
-
-function FolderGlyph({open}: { open: boolean }) {
-    return (
-        <svg class="shrink-0 text-amber-400" width="15" height="15" viewBox="0 0 16 16" fill="currentColor"
-             aria-hidden="true">
-            <path d={open ? "M1.5 4h5l1.2 1.3h6.8l-1.4 7.2H2.6z" : "M1.5 3h5l1.2 1.5h6.8v8H1.5z"}/>
-        </svg>
-    );
-}
-
-export function ExplorerGlyph() {
-    return (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-             aria-hidden="true">
-            <path d="M6 3.5h8l4 4v13H6z"/>
-            <path d="M14 3.5v4h4M3 7.5v13h11"/>
-        </svg>
     );
 }

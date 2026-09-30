@@ -1,5 +1,6 @@
 import type {ComponentChildren} from "preact";
 import {useRef, useState} from "preact/hooks";
+import {VisualizerIcon} from "../Codicon";
 
 interface PreviewPanelProps {
     children: ComponentChildren;
@@ -93,7 +94,7 @@ export function PreviewPanel({children}: PreviewPanelProps) {
             <button type="button" aria-label={open ? "Collapse visualizer" : "Expand visualizer"}
                     aria-expanded={open} title={open ? "Collapse visualizer" : "Expand visualizer"}
                     class="flex h-9 w-10 shrink-0 items-center justify-center text-zinc-400 hover:bg-white/5 hover:text-white"
-                    onClick={toggle}>{open ? ">" : "<"}</button>
+                    onClick={toggle}><VisualizerIcon/></button>
             {open && <span class="text-xs font-semibold uppercase tracking-wide text-zinc-400">Visualizer</span>}
         </div>
         {open && <div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 [container-type:inline-size]">{children}</div>}

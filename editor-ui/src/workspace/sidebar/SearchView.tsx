@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from "preact/hooks";
-import {FileGlyph} from "../FileGlyph";
+import {FileGlyph} from "../Codicon";
 import {collectJsonFiles, entryKey, entrySource, type WorkspaceEntry, type WorkspaceTree} from "../model";
 
 interface SearchViewProps {
@@ -55,14 +55,5 @@ export function SearchView({tree, datapacks, active, selectedPath, onOpen, onCon
                 )}
             </div>
         </>
-    );
-}
-
-export function SearchGlyph() {
-    return (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <circle cx="10.5" cy="10.5" r="6.5"/>
-            <path d="m15.5 15.5 5 5"/>
-        </svg>
     );
 }
