@@ -10,7 +10,6 @@ import {
 
 interface AdvancementPreviewProps {
     path?: string;
-    token: string;
     workspace?: WorkspaceTree;
     datapacks?: WorkspaceTree;
     openContents: AdvancementFile[];
@@ -43,7 +42,6 @@ function fallbackTitle(node: PositionedAdvancement): string {
 
 export function AdvancementPreview({
                                        path,
-                                       token,
                                        workspace,
                                        datapacks,
                                        openContents,
@@ -72,17 +70,17 @@ export function AdvancementPreview({
 
     useEffect(() => {
         let cancelled = false;
-        void fetch("/api/recipe-items", {headers: {Authorization: `Bearer ${token}`}})
+        void fetch("/api/recipe-items")
             .then(async response => response.ok ? await response.json() as string[] : [])
             .then(items => { if (!cancelled) setItemIds(items); })
             .catch(() => undefined);
         return () => { cancelled = true; };
-    }, [token]);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
-        void fetch("/api/advancements", {headers: {Authorization: `Bearer ${token}`}})
+        void fetch("/api/advancements")
             .then(async response => {
                 if (!response.ok) throw new Error(`Advancements unavailable (${response.status})`);
                 return response.json() as Promise<AdvancementFile[]>;
@@ -102,7 +100,7 @@ export function AdvancementPreview({
         return () => {
             cancelled = true;
         };
-    }, [token]);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -117,8 +115,7 @@ export function AdvancementPreview({
             while (next < workspacePaths.length) {
                 const filePath = workspacePaths[next++];
                 try {
-                    const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`,
-                        {headers: {Authorization: `Bearer ${token}`}});
+                    const response = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
                     if (response.ok) result.push({path: filePath, content: await response.text()});
                 } catch { /* Keep other advancements available if one read fails. */
                 }
@@ -131,7 +128,7 @@ export function AdvancementPreview({
         return () => {
             cancelled = true;
         };
-    }, [workspacePaths.join("|"), savedRevision, token]);
+    }, [workspacePaths.join("|"), savedRevision]);
 
     const files = useMemo(() => {
         const merged = new Map([...loaded, ...workspaceFiles].map(file => [file.path, file]));
@@ -165,8 +162,7 @@ export function AdvancementPreview({
         const namespaces = [...new Set(["minecraft", ...nodes.map(node => node.id.split(":")[0])])];
         let cancelled = false;
         void Promise.all(namespaces.map(async namespace => {
-            const response = await fetch(`/api/asset-resolved?path=${encodeURIComponent(`assets/${namespace}/lang/en_us.json`)}`,
-                {headers: {Authorization: `Bearer ${token}`}});
+            const response = await fetch(`/api/asset-resolved?path=${encodeURIComponent(`assets/${namespace}/lang/en_us.json`)}`);
             return response.ok ? await response.json() as Record<string, string> : {};
         })).then(values => {
             if (!cancelled) setLanguage(Object.assign({}, ...values));
@@ -177,7 +173,7 @@ export function AdvancementPreview({
         return () => {
             cancelled = true;
         };
-    }, [tree?.root.id, token]);
+    }, [tree?.root.id]);
 
     const iconKey = nodes.map(node => `${node.id}:${node.display?.icon?.id ?? node.display?.icon?.item ?? ""}`).join("|");
     useEffect(() => {
@@ -188,13 +184,13 @@ export function AdvancementPreview({
             const id = icon?.id ?? icon?.item;
             return id ? {id, count: 1, components: icon?.components} : null;
         });
-        void renderItemIcons(items, token, (index, image) => {
+        void renderItemIcons(items, (index, image) => {
             if (!cancelled) setIcons(current => ({...current, [nodes[index].id]: image}));
         });
         return () => {
             cancelled = true;
         };
-    }, [iconKey, token]);
+    }, [iconKey]);
 
     useEffect(() => {
         const source = tree?.root.display?.background;
@@ -205,8 +201,7 @@ export function AdvancementPreview({
         let cancelled = false;
         let url: string | undefined;
         setBackground(undefined);
-        void fetch(`/api/asset-resolved?path=${encodeURIComponent(assetPath(source))}`,
-            {headers: {Authorization: `Bearer ${token}`}}).then(async response => {
+        void fetch(`/api/asset-resolved?path=${encodeURIComponent(assetPath(source))}`).then(async response => {
             if (!response.ok) return;
             url = URL.createObjectURL(await response.blob());
             if (cancelled) URL.revokeObjectURL(url);
@@ -216,7 +211,7 @@ export function AdvancementPreview({
             cancelled = true;
             if (url) URL.revokeObjectURL(url);
         };
-    }, [tree?.root.display?.background, token]);
+    }, [tree?.root.display?.background]);
 
     useEffect(() => {
         const panel = viewport.current;

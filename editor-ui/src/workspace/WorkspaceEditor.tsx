@@ -34,10 +34,6 @@ import {
     monaco
 } from "./monaco";
 
-interface WorkspaceEditorProps {
-    token: string;
-}
-
 interface ExplorerContextMenu {
     entry: WorkspaceEntry;
     x: number;
@@ -46,7 +42,7 @@ interface ExplorerContextMenu {
 
 const apiRoot = "/api";
 
-export function WorkspaceEditor({token}: WorkspaceEditorProps) {
+export function WorkspaceEditor() {
     const editorHost = useRef<HTMLDivElement>(null);
     const editor = useRef<monaco.editor.IStandaloneCodeEditor>();
     const models = useRef(new Map<string, monaco.editor.ITextModel>());
@@ -68,9 +64,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
     const [cursor, setCursor] = useState({line: 1, column: 1});
 
     const request = async (path: string, init?: RequestInit) => {
-        const headers = new Headers(init?.headers);
-        headers.set("Authorization", `Bearer ${token}`);
-        const response = await fetch(`${apiRoot}${path}`, {...init, headers});
+        const response = await fetch(`${apiRoot}${path}`, init);
         if (!response.ok) {
             let detail = `Request failed (${response.status})`;
             try {
@@ -87,7 +81,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         const id = lootTableId(activePath);
         const response = await fetch(`${apiRoot}/chest-simulation${id ? `?id=${encodeURIComponent(id)}` : ""}`, {
             method: "POST",
-            headers: {"Authorization": `Bearer ${token}`, "Content-Type": "application/json"},
+            headers: {"Content-Type": "application/json"},
             body: content
         });
         if (!response.ok) {
@@ -95,11 +89,11 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
             throw new Error(result.error ?? `Loot simulation failed (${response.status})`);
         }
         return response.json() as Promise<ChestSimulation>;
-    }, [token, activePath]);
+    }, [activePath]);
 
     useEffect(() => {
-        preloadItemAssets(token);
-    }, [token]);
+        preloadItemAssets();
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -132,7 +126,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
         return () => {
             cancelled = true;
         };
-    }, [token]);
+    }, []);
 
     const refreshTree = async () => {
         try {
@@ -546,7 +540,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                 void openFile(first.path, first.editable, "workspace");
             }
         });
-    }, [token]);
+    }, []);
 
     const activeReadOnly = Boolean(activePath && isDatapackKey(activePath));
     const activeDirty = activePath && !activeReadOnly ? isDirty(activePath) : false;
@@ -675,13 +669,13 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
                 {!showingAdvancements && isRecipePath(activeDisplayPath) &&
                     <RecipePreview path={activePath ? displayPath(activePath) : undefined}
                                    content={activePath ? models.current.get(activePath)?.getValue() : undefined}
-                                   token={token} readOnly={activeReadOnly} onContentChange={replaceActiveContent}/>}
+                                   readOnly={activeReadOnly} onContentChange={replaceActiveContent}/>}
                 {!showingAdvancements && isChestLootTablePath(activeDisplayPath) &&
                     <LootPreview content={activePath ? models.current.get(activePath)?.getValue() : undefined}
-                                 token={token} simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>}
+                                 simulationRevision={simulationRevision} simulateLoot={simulateLoot}/>}
                 {showingAdvancements &&
                     <AdvancementPreview path={activeDisplayPath}
-                                        token={token} workspace={tree} datapacks={datapacks}
+                                        workspace={tree} datapacks={datapacks}
                                         openContents={openAdvancements}
                                         savedRevision={simulationRevision} readOnly={activeReadOnly}
                                         content={isAdvancementPath(activeDisplayPath) && activePath
@@ -730,7 +724,7 @@ export function WorkspaceEditor({token}: WorkspaceEditorProps) {
 }
 
 function modelUri(key: string) {
-    const root = isDatapackKey(key) ? "loaded-datapacks" : "epherolib-workspace";
+    const root = isDatapackKey(key) ? "loaded-datapacks" : "workspace";
     return monaco.Uri.from({scheme: "file", path: `/${root}/${displayPath(key)}`});
 }
 

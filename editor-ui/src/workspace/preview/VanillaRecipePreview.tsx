@@ -28,12 +28,11 @@ const menuPath = "assets/minecraft/textures/gui/container/";
 const pageSize = 45;
 const menuImages = new Map<string, Promise<string>>();
 
-function menuImage(texture: string, token: string): Promise<string> {
-    const key = `${token}:${texture}`;
+function menuImage(texture: string): Promise<string> {
+    const key = texture;
     let pending = menuImages.get(key);
     if (!pending) {
-        pending = fetch(`/api/asset-resolved?path=${encodeURIComponent(menuPath + texture)}`,
-            {headers: {Authorization: `Bearer ${token}`}}).then(async response => {
+        pending = fetch(`/api/asset-resolved?path=${encodeURIComponent(menuPath + texture)}`).then(async response => {
             if (!response.ok) throw new Error(`Could not load ${texture} (${response.status}).`);
             return URL.createObjectURL(await response.blob());
         }).catch(reason => { menuImages.delete(key); throw reason; });
@@ -68,7 +67,7 @@ function slotsFor(type: VanillaRecipeLayout["kind"]): Array<{id: RecipeSlot; x: 
     ];
 }
 
-export function VanillaRecipePreview({path, recipe, token, readOnly, onContentChange, layout}:
+export function VanillaRecipePreview({path, recipe, readOnly, onContentChange, layout}:
     RecipePreviewComponentProps & {layout: VanillaRecipeLayout}) {
     const type = layout.kind;
     const [textureUrl, setTextureUrl] = useState<string>();
@@ -118,7 +117,7 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
         const timeout = window.setTimeout(() => {
             void fetch("/api/ingredient-preview", {
                 method: "POST", signal: controller.signal,
-                headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"},
+                headers: {"Content-Type": "application/json"},
                 body: ingredientKey
             }).then(async response => {
                 const result = await response.json();
@@ -129,7 +128,7 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
             });
         }, 250);
         return () => { controller.abort(); window.clearTimeout(timeout); };
-    }, [ingredientKey, token]);
+    }, [ingredientKey]);
 
     const shownStacks = slots.flatMap(slot => [ingredientStack(slot.id), ingredientStack(slot.id, 1)])
         .filter((stack): stack is ChestStack => Boolean(stack));
@@ -139,47 +138,47 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
             .filter(stack => !ingredientIcons[JSON.stringify(stack)]);
         if (!missing.length) return;
         let cancelled = false;
-        void renderItemIcons(missing, token, (index, icon) => {
+        void renderItemIcons(missing, (index, icon) => {
             if (!cancelled) setIngredientIcons(current => ({...current, [JSON.stringify(missing[index])]: icon}));
         }).catch(reason => { if (!cancelled) setIngredientError(String(reason)); });
         return () => { cancelled = true; };
-    }, [shownStackKey, token]);
+    }, [shownStackKey]);
 
     useEffect(() => {
         let cancelled = false;
         setTextureUrl(undefined);
         setTextureError(undefined);
-        void menuImage(layout.texture, token).then(value => {
+        void menuImage(layout.texture).then(value => {
             if (!cancelled) setTextureUrl(value);
         }).catch(reason => {
             if (!cancelled) setTextureError(reason instanceof Error ? reason.message : String(reason));
         });
         return () => { cancelled = true; };
-    }, [layout.texture, token]);
+    }, [layout.texture]);
 
     useEffect(() => {
         if (!picker || pickerMode !== "items" || items.length) return;
         let cancelled = false;
-        void fetch("/api/recipe-items", {headers: {Authorization: `Bearer ${token}`}})
+        void fetch("/api/recipe-items")
             .then(async response => {
                 if (!response.ok) throw new Error(`Item list unavailable (${response.status})`);
                 return response.json() as Promise<string[]>;
             }).then(result => { if (!cancelled) setItems(result); })
             .catch(reason => { if (!cancelled) setItemError(reason instanceof Error ? reason.message : String(reason)); });
         return () => { cancelled = true; };
-    }, [picker, pickerMode, token, items.length]);
+    }, [picker, pickerMode, items.length]);
 
     useEffect(() => {
         if (!needsTags || tags) return;
         let cancelled = false;
-        void fetch("/api/recipe-tags", {headers: {Authorization: `Bearer ${token}`}})
+        void fetch("/api/recipe-tags")
             .then(async response => {
                 if (!response.ok) throw new Error(`Item tags unavailable (${response.status})`);
                 return response.json() as Promise<Record<string, string[]>>;
             }).then(result => { if (!cancelled) setTags(result); })
             .catch(reason => { if (!cancelled) setTagError(reason instanceof Error ? reason.message : String(reason)); });
         return () => { cancelled = true; };
-    }, [needsTags, tags, token]);
+    }, [needsTags, tags]);
 
     useEffect(() => {
         if ((!needsTags || !tags) && !hasRotatingIngredients) return;
@@ -230,14 +229,14 @@ export function VanillaRecipePreview({path, recipe, token, readOnly, onContentCh
         const missing = iconIds.filter(id => !icons[id]);
         if (!missing.length) return;
         let cancelled = false;
-        void renderItemIcons(missing.map(id => ({id, count: 1})), token, (index, icon) => {
+        void renderItemIcons(missing.map(id => ({id, count: 1})), (index, icon) => {
             if (!cancelled) setIcons(current => ({...current, [missing[index]]: icon}));
         }).then(result => {
             if (cancelled) return;
             if (result.failed.length) setIconError(`${result.failed.length} item icons could not be rendered.`);
         }).catch(reason => { if (!cancelled) setIconError(reason instanceof Error ? reason.message : String(reason)); });
         return () => { cancelled = true; };
-    }, [iconIds.join("|"), token]);
+    }, [iconIds.join("|")]);
 
     const write = (next: RecipeObject) => onContentChange(`${JSON.stringify(next, null, 2)}\n`);
     const put = (slot: RecipeSlot, id: string | undefined) => {

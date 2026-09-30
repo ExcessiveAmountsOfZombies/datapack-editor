@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class EditorWorkspace {
-    public static final String DIRECTORY_NAME = "epherolib-workspace";
+    public static final String DIRECTORY_NAME = "workspace";
 
     private static final int MAX_ENTRIES = 2_000;
     private static final int MAX_DEPTH = 24;
@@ -312,15 +312,6 @@ public class EditorWorkspace {
     private static void seedExamples() throws IOException {
         Path scripts = createSeedDirectory("scripts");
         Path data = createSeedDirectory("data");
-        writeExample(scripts.resolve("example.js"), """
-                // KubeJS server script example
-                ServerEvents.recipes(event => {
-                  event.shapeless(
-                    Item.of('minecraft:diamond', 2),
-                    ['minecraft:coal', 'minecraft:coal']
-                  )
-                })
-                """);
         writeExample(data.resolve("example.json"), """
                 {
                   "type": "minecraft:crafting_shapeless",

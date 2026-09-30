@@ -6,12 +6,11 @@ import {ServerRecipePreview} from "./ServerRecipePreview";
 interface RecipePreviewProps {
     path?: string;
     content?: string;
-    token: string;
     readOnly: boolean;
     onContentChange: (content: string) => void;
 }
 
-export function RecipePreview({path, content, token, readOnly, onContentChange}: RecipePreviewProps) {
+export function RecipePreview({path, content, readOnly, onContentChange}: RecipePreviewProps) {
     const recipe = useMemo(() => parseRecipe(content), [content]);
     const type = typeof recipe?.type === "string" ? recipe.type : "";
     const registration = getRecipePreview(type);
@@ -41,7 +40,7 @@ export function RecipePreview({path, content, token, readOnly, onContentChange}:
         {!recipe && content?.trim() && <p class="text-amber-300">Fix the JSON or select a recipe type to start a new recipe.</p>}
         {recipe && (Component
             ? <Component key={`${path}:${type}`} path={path} content={content!} recipe={recipe}
-                         token={token} readOnly={readOnly} onContentChange={write}/>
-            : <ServerRecipePreview key={`${path}:${type}`} content={content!} token={token}/>)}
+                         readOnly={readOnly} onContentChange={write}/>
+            : <ServerRecipePreview key={`${path}:${type}`} content={content!}/>)}
     </div>;
 }

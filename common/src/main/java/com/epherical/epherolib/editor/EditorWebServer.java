@@ -4,34 +4,24 @@ import com.epherical.epherolib.impl.DataPackSchemaImpl;
 import com.epherical.epherolib.impl.schemas.RecipeSchemaBuilder;
 import com.epherical.epherolib.impl.schemas.TagSchemaBuilder;
 import io.javalin.Javalin;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
 import io.javalin.http.staticfiles.Location;
 import net.minecraft.server.MinecraftServer;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.util.Base64;
 
 public class EditorWebServer {
     public static final String HOST = "127.0.0.1";
     public static final int PORT = 8700;
 
-    private static final SecureRandom RANDOM = new SecureRandom();
     public static final String CACHE_CONTROL = "Cache-Control";
     public static final String NO_STORE = "no-store";
     public static final String CONTENT_TYPE = "application/json";
     public static final String HTTP = "http://";
     private static Javalin application;
-    private static String accessToken;
 
     public static synchronized StartResult start(MinecraftServer server) {
         if (application != null) {
             return new StartResult(false, editorUrl());
         }
 
-        accessToken = createToken();
         Javalin newApplication = null;
         try {
             EditorWorkspace.initialize();
@@ -52,7 +42,6 @@ public class EditorWebServer {
                                     img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:
                                     """);
                 });
-                config.routes.before("/api/*", EditorWebServer::requireAccessToken);
                 config.routes.get("/api/status", ctx -> ctx
                         .contentType(CONTENT_TYPE)
                         .result(statusJson()));
@@ -91,7 +80,6 @@ public class EditorWebServer {
             application = newApplication;
             return new StartResult(true, editorUrl());
         } catch (RuntimeException | LinkageError exception) {
-            accessToken = null;
             if (newApplication != null) {
                 try {
                     newApplication.stop();
@@ -110,7 +98,6 @@ public class EditorWebServer {
 
         Javalin runningApplication = application;
         application = null;
-        accessToken = null;
         runningApplication.stop();
         return true;
     }
@@ -120,34 +107,7 @@ public class EditorWebServer {
     }
 
     public static synchronized String editorUrl() {
-        if (accessToken == null) {
-            return HTTP + HOST + ":" + PORT + "/";
-        }
-        return HTTP + HOST + ":" + PORT + "/#token=" + accessToken;
-    }
-
-    private static void requireAccessToken(Context context) {
-        String authorization = context.header("Authorization");
-        String expected = "Bearer " + accessToken;
-        if (authorization == null || !constantTimeEquals(authorization, expected)) {
-            context.status(HttpStatus.UNAUTHORIZED)
-                    .contentType(CONTENT_TYPE)
-                    .result("{\"error\":\"Open the editor from the in-game command to authenticate.\"}")
-                    .skipRemainingHandlers();
-        }
-    }
-
-    private static boolean constantTimeEquals(String actual, String expected) {
-        return MessageDigest.isEqual(
-                actual.getBytes(StandardCharsets.UTF_8),
-                expected.getBytes(StandardCharsets.UTF_8)
-        );
-    }
-
-    private static String createToken() {
-        byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return HTTP + HOST + ":" + PORT + "/";
     }
 
     private static String statusJson() {
@@ -157,7 +117,7 @@ public class EditorWebServer {
                   "state": "running",
                   "host": "%s",
                   "port": %d,
-                  "security": "loopback + bearer token",
+                  "security": "loopback",
                   "workspace": "%s",
                   "features": ["Preact", "Tailwind CSS", "Monaco", "Three.js"]
                 }

@@ -1,6 +1,7 @@
 package com.epherical.epherolib.editor;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
@@ -120,10 +121,15 @@ public class EditorAssets {
     private byte[] buildBundle() {
         long started = System.nanoTime();
         Set<String> included = new HashSet<>();
+        Set<String> atlases = new TreeSet<>();
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
              ZipOutputStream output = new ZipOutputStream(bytes)) {
             for (Source source : sources) {
-                source.writeBundle(output, included);
+                source.writeBundle(output, included, atlases);
+            }
+            for (String path : atlases) {
+                byte[] merged = readAtlas(path);
+                if (merged != null) bundleEntry(output, included, path, merged);
             }
             if (!included.contains("assets/minecraft/textures/block/stone.png")
                     || !included.contains("assets/minecraft/models/block/stone.json")
@@ -164,6 +170,45 @@ public class EditorAssets {
         output.write(adaptItemDefinition(path, bytes));
         output.closeEntry();
         included.add(path);
+    }
+
+    private static boolean atlasPath(String path) {
+        return path.matches("assets/[^/]+/atlases/.+\\.json");
+    }
+
+    private byte @Nullable [] readAtlas(String path) throws IOException {
+        JsonArray entries = new JsonArray();
+        boolean found = false;
+        // Minecraft applies atlas sources from low to high pack priority, including filters.
+        for (Source source : sources.reversed()) {
+            byte[] bytes = source.read(path);
+            if (bytes == null) continue;
+            try {
+                JsonElement value = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8));
+                if (!value.isJsonObject() || !value.getAsJsonObject().has("sources")
+                        || !value.getAsJsonObject().get("sources").isJsonArray()) {
+                    LOGGER.warn("Ignoring invalid editor atlas {} from {}: expected a sources array", path, source.name);
+                    continue;
+                }
+                entries.addAll(value.getAsJsonObject().getAsJsonArray("sources"));
+                found = true;
+            } catch (JsonParseException exception) {
+                LOGGER.warn("Ignoring invalid editor atlas {} from {}", path, source.name, exception);
+            }
+        }
+        if (!found) return null;
+        JsonObject atlas = new JsonObject();
+        atlas.add("sources", entries);
+        return GSON.toJson(atlas).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private byte @Nullable [] resolveFile(String path) throws IOException {
+        if (atlasPath(path)) return readAtlas(path);
+        for (Source source : sources) {
+            byte[] bytes = source.read(path);
+            if (bytes != null) return adaptItemDefinition(path, bytes);
+        }
+        return null;
     }
 
     private static byte[] adaptItemDefinition(String path, byte[] bytes) {
@@ -228,14 +273,12 @@ public class EditorAssets {
             return;
         }
         try {
-            for (Source source : sources) {
-                byte[] bytes = source.read(path);
-                if (bytes != null) {
-                    context.header("Cache-Control", "private, max-age=300")
-                            .contentType("application/octet-stream")
-                            .result(adaptItemDefinition(path, bytes));
-                    return;
-                }
+            byte[] bytes = resolveFile(path);
+            if (bytes != null) {
+                context.header("Cache-Control", "private, max-age=300")
+                        .contentType("application/octet-stream")
+                        .result(bytes);
+                return;
             }
             error(context, HttpStatus.NOT_FOUND, "Asset not found");
         } catch (IOException exception) {
@@ -358,7 +401,7 @@ public class EditorAssets {
             }
         }
 
-        public void writeBundle(ZipOutputStream output, Set<String> included) throws IOException {
+        public void writeBundle(ZipOutputStream output, Set<String> included, Set<String> atlases) throws IOException {
             if (jar != null) {
                 try (ZipFile zip = new ZipFile(jar.toFile())) {
                     var entries = zip.entries();
@@ -366,6 +409,10 @@ public class EditorAssets {
                         ZipEntry entry = entries.nextElement();
                         String path = entry.getName();
                         if (entry.isDirectory() || !bundlePath(path) || included.contains(path)) continue;
+                        if (atlasPath(path)) {
+                            atlases.add(path);
+                            continue;
+                        }
                         try (InputStream input = zip.getInputStream(entry)) {
                             bundleEntry(output, included, path, input.readAllBytes());
                         }
@@ -379,6 +426,10 @@ public class EditorAssets {
                     pack.listResources(PackType.CLIENT_RESOURCES, namespace, directory, (location, supplier) -> {
                         String path = ASSETS + namespace + FORWARD_SLASH + location.getPath();
                         if (!bundlePath(path) || included.contains(path)) return;
+                        if (atlasPath(path)) {
+                            atlases.add(path);
+                            return;
+                        }
                         try (InputStream input = supplier.get()) {
                             bundleEntry(output, included, path, input.readAllBytes());
                         } catch (IOException exception) {

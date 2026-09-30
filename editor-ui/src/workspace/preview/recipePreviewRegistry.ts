@@ -5,7 +5,6 @@ export interface RecipePreviewComponentProps {
     path?: string;
     content: string;
     recipe: RecipeObject;
-    token: string;
     readOnly: boolean;
     onContentChange: (content: string) => void;
 }

@@ -4,14 +4,13 @@ import {chestLootError, type ChestSimulation} from "./lootTable";
 
 interface LootPreviewProps {
     content?: string;
-    token: string;
     simulationRevision: number;
     simulateLoot: (content: string) => Promise<ChestSimulation>;
 }
 
 const chestSize = 27;
 
-export function LootPreview({content, token, simulationRevision, simulateLoot}: LootPreviewProps) {
+export function LootPreview({content, simulationRevision, simulateLoot}: LootPreviewProps) {
     const [reroll, setReroll] = useState(0);
     const [simulation, setSimulation] = useState<ChestSimulation>();
     const [loading, setLoading] = useState(false);
@@ -53,7 +52,7 @@ export function LootPreview({content, token, simulationRevision, simulateLoot}: 
         setAssetError(undefined);
         if (!simulation) return;
         let cancelled = false;
-        void renderItemIcons(simulation.slots, token, (index, icon) => {
+        void renderItemIcons(simulation.slots, (index, icon) => {
             if (cancelled) return;
             setIcons(current => ({seed: simulation.seed,
                 values: {...(current?.seed === simulation.seed ? current.values : {}), [index]: icon}}));
@@ -64,7 +63,7 @@ export function LootPreview({content, token, simulationRevision, simulateLoot}: 
             if (!cancelled) setAssetError(reason instanceof Error ? reason.message : String(reason));
         });
         return () => { cancelled = true; };
-    }, [simulation, token]);
+    }, [simulation]);
 
     const filled = simulation?.slots.filter(stack => stack !== null).length ?? 0;
 

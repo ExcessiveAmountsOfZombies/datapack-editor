@@ -7,7 +7,7 @@ interface RecipeDisplay {
     slots: Array<{label: string; items: ChestStack[]; error?: string}>;
 }
 
-export function ServerRecipePreview({content, token}: {content: string; token: string}) {
+export function ServerRecipePreview({content}: {content: string}) {
     const [preview, setPreview] = useState<{content: string; enabled: boolean; displays?: RecipeDisplay[]}>();
     const [error, setError] = useState<string>();
     const [frame, setFrame] = useState(0);
@@ -20,7 +20,7 @@ export function ServerRecipePreview({content, token}: {content: string; token: s
         const timer = window.setTimeout(() => {
             void fetch("/api/recipe-preview", {
                 method: "POST", signal: controller.signal,
-                headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"}, body: content
+                headers: {"Content-Type": "application/json"}, body: content
             }).then(async response => {
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error ?? "Recipe display unavailable");
@@ -28,7 +28,7 @@ export function ServerRecipePreview({content, token}: {content: string; token: s
             }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
         }, 250);
         return () => { controller.abort(); window.clearTimeout(timer); };
-    }, [content, token]);
+    }, [content]);
 
     useEffect(() => {
         const timer = window.setInterval(() => setFrame(value => value + 1), 1600);
@@ -42,11 +42,11 @@ export function ServerRecipePreview({content, token}: {content: string; token: s
         const missing = stacks.filter(stack => !icons[JSON.stringify(stack)]);
         if (!missing.length) return;
         let cancelled = false;
-        void renderItemIcons(missing, token, (index, icon) => {
+        void renderItemIcons(missing, (index, icon) => {
             if (!cancelled) setIcons(value => ({...value, [JSON.stringify(missing[index])]: icon}));
         }).catch(reason => { if (!cancelled) setError(String(reason)); });
         return () => { cancelled = true; };
-    }, [stackKey, token]);
+    }, [stackKey]);
 
     return <div class="space-y-3">
         {error && <p class="text-amber-300">{error}</p>}
