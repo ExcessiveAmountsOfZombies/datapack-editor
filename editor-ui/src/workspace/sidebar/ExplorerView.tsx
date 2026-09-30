@@ -119,8 +119,6 @@ export function ExplorerView(props: ExplorerViewProps) {
                 class="flex h-11 items-center justify-between px-4 text-[11px] font-medium uppercase tracking-wide text-zinc-300">
                 <span>Explorer</span>
                 <div class="flex items-center gap-0.5">
-                    <ToolButton label="New file" onClick={() => props.onCreate("file")}>+F</ToolButton>
-                    <ToolButton label="New folder" onClick={() => props.onCreate("folder")}>+D</ToolButton>
                     <ToolButton label="Refresh" onClick={props.onRefresh}>↻</ToolButton>
                 </div>
             </div>
