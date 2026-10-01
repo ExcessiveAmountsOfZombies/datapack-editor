@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "block-model-renderer": "2.20.0",
     "monaco-editor": "0.56.0",
     "preact": "10.29.8",
     "three": "0.186.0"

@@ -38,8 +38,8 @@ public class EditorWebServer {
                     ctx.header("Referrer-Policy", "no-referrer");
                     ctx.header("Content-Security-Policy",
                             """
-                                    default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; \
-                                    img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:
+                                    default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+                                    img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:
                                     """);
                 });
                 config.routes.get("/api/status", ctx -> ctx

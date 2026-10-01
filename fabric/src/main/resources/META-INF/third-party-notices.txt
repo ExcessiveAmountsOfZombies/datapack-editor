@@ -1,0 +1,36 @@
+EpheroLib editor - third-party notices
+
+block-model-renderer 2.20.0
+Copyright: 2026 Ewan Howell
+Licensed under the Mozilla Public License, version 2.0 (MPL-2.0).
+The complete license is included in licenses/block-model-renderer-MPL-2.0.txt.
+
+The renderer is bundled with this editor. Its source code, including the Rust
+source for its WebAssembly helper, is available under MPL-2.0 at:
+https://github.com/ewanhowell5195/block-model-renderer/tree/f008738736efa8617eaa93b4c06872738fe83cb3
+
+The exact npm distribution, including JavaScript source and bundled assets, is:
+https://registry.npmjs.org/block-model-renderer/-/block-model-renderer-2.20.0.tgz
+
+Upstream: https://github.com/ewanhowell5195/block-model-renderer
+EpheroLib does not modify the upstream renderer source. Vite transforms and
+minifies the browser distribution for inclusion in the editor build.
+
+The renderer's license applies to its covered files. EpheroLib's own license
+remains separate. Other bundled dependencies retain their own license notices.
+
+The renderer's WebAssembly helper also includes these MIT-licensed components:
+
+wasm-bindgen 0.2.127 (including wasm-bindgen-shared and generated bindings)
+Copyright (c) 2014 Alex Crichton
+License: licenses/wasm-bindgen-MIT.txt
+Source: https://github.com/wasm-bindgen/wasm-bindgen/tree/0.2.127
+
+cfg-if 1.0.4
+Copyright (c) 2014 Alex Crichton
+License: licenses/cfg-if-MIT.txt
+Source: https://github.com/rust-lang/cfg-if
+
+once_cell 1.21.4
+License: licenses/once_cell-MIT.txt
+Source: https://github.com/matklad/once_cell

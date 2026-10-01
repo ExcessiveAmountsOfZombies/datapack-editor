@@ -45,6 +45,12 @@ node {
     download = true
     version = '24.13.0'
     nodeProjectDir = editorUiDirectory
+    npmInstallCommand = 'ci'
+}
+
+// Only the renderer's browser export is bundled; its native Node renderers need no install scripts.
+tasks.named('npmInstall') {
+    args = ['--ignore-scripts']
 }
 
 def buildEditorUi = tasks.register('buildEditorUi', NpmTask) {

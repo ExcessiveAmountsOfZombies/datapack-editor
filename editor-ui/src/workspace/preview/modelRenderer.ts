@@ -9,8 +9,6 @@ export interface BlockScene {
     dispose(): void;
 }
 
-const rendererUrl = "https://cdn.jsdelivr.net/npm/block-model-renderer@2/dist/block-model-renderer.min.js";
-
 interface AssetManifest {
     version: string;
     sources: Array<{id: number; name: string}>;
@@ -44,7 +42,7 @@ let sessionPromise: Promise<Session> | undefined;
 
 async function loadRenderer(): Promise<RendererModule> {
     if (!rendererPromise) {
-        rendererPromise = import(/* @vite-ignore */ rendererUrl).then(module => {
+        rendererPromise = import("block-model-renderer").then(module => {
             const renderer = module as RendererModule;
             renderer.configure({THREE});
             return renderer;
