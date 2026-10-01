@@ -7,6 +7,8 @@ import {LootPreview} from "./preview/LootPreview";
 import {AdvancementPreview} from "./preview/AdvancementPreview";
 import {PreviewPanel} from "./preview/PreviewPanel";
 import {RecipePreview} from "./preview/RecipePreview";
+import {ConfiguredFeaturePreview} from "./preview/ConfiguredFeaturePreview";
+import {featureResource, isConfiguredFeaturePath, type FeatureSettings, type FeatureSimulation} from "./preview/configuredFeature";
 import {type ChestSimulation, isChestLootTablePath, lootTableId} from "./preview/lootTable";
 import {isRecipePath} from "./preview/recipeDocument";
 import {preloadItemAssets} from "./preview/modelRenderer";
@@ -96,6 +98,26 @@ export function WorkspaceEditor() {
         }
         return response.json() as Promise<ChestSimulation>;
     }, [activePath]);
+
+    const simulateFeature = useCallback(async (content: string, settings: FeatureSettings, signal: AbortSignal): Promise<FeatureSimulation> => {
+        const overrides: Record<string, unknown> = {};
+        for (const [path, model] of models.current) {
+            if (isDatapackKey(path)) continue;
+            const resource = featureResource(displayPath(path));
+            if (!resource) continue;
+            try { overrides[`${resource.kind}/${resource.id}`] = JSON.parse(model.getValue()); }
+            catch { overrides[`${resource.kind}/${resource.id}`] = model.getValue(); }
+        }
+        const response = await fetch(`${apiRoot}/configured-feature-preview`, {
+            method: "POST", headers: {"Content-Type": "application/json"}, signal,
+            body: JSON.stringify({feature: JSON.parse(content), ...settings, overrides})
+        });
+        if (!response.ok) {
+            const result = await response.json() as {error?: string};
+            throw new Error(result.error ?? `Feature generation failed (${response.status})`);
+        }
+        return response.json() as Promise<FeatureSimulation>;
+    }, []);
 
     useEffect(() => {
         preloadItemAssets();
@@ -704,6 +726,9 @@ export function WorkspaceEditor() {
             </div>
 
             <PreviewPanel>
+                {isConfiguredFeaturePath(activeDisplayPath) && activePath &&
+                    <ConfiguredFeaturePreview key={activePath} content={models.current.get(activePath)?.getValue() ?? ""}
+                                              referenceRevision={revision + simulationRevision} simulate={simulateFeature}/>}
                 {!showingAdvancements && isRecipePath(activeDisplayPath) &&
                     <RecipePreview path={activePath ? displayPath(activePath) : undefined}
                                    content={activePath ? models.current.get(activePath)?.getValue() : undefined}

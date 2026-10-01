@@ -1,5 +1,13 @@
 import * as THREE from "three";
 import type {ChestStack} from "./lootTable";
+import type {FeatureBlock} from "./configuredFeature";
+
+export interface BlockScene {
+    group: THREE.Group;
+    bounds: THREE.Box3;
+    sortTranslucent(camera: THREE.Camera): void;
+    dispose(): void;
+}
 
 const rendererUrl = "https://cdn.jsdelivr.net/npm/block-model-renderer@2/dist/block-model-renderer.min.js";
 
@@ -18,6 +26,9 @@ interface RendererModule {
     prepareAssets(sources: Array<Blob | VirtualAssets>, options: {cache: boolean; version: string}): Promise<unknown>;
     renderItem(options: {id: string; components?: Record<string, unknown>; assets: unknown;
         width: number; height: number; version: string}): Promise<HTMLCanvasElement>;
+    createScene(assets: unknown, blocks: FeatureBlock[], options: {version: string; defaults: "game";
+        randomOffset: boolean; lighting: "world"; origin: [number, number, number];
+        shouldCancel: () => boolean}): Promise<BlockScene | null>;
 }
 
 interface Session {
@@ -106,6 +117,13 @@ function assetHandler(): VirtualAssets {
 
 export function preloadItemAssets(): void {
     void loadSession().catch(() => undefined);
+}
+
+export async function createBlockScene(blocks: FeatureBlock[], shouldCancel: () => boolean): Promise<BlockScene | null> {
+    const session = await loadSession();
+    if (shouldCancel()) return null;
+    return session.renderer.createScene(session.assets, blocks, {version: session.version, defaults: "game",
+        randomOffset: true, lighting: "world", origin: [0, 64, 0], shouldCancel});
 }
 
 export async function renderItemIcon(stack: ChestStack): Promise<string | undefined> {
