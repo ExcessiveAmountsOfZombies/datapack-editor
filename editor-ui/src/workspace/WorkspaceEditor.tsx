@@ -708,7 +708,7 @@ export function WorkspaceEditor() {
                     {!activePath && (
                         <div
                             class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm text-zinc-600">
-                            Select a file from Explorer
+                            Select a file
                         </div>
                     )}
                     <div ref={editorHost} class="absolute inset-0"/>
