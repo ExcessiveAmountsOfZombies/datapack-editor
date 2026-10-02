@@ -98,7 +98,7 @@ export function ExplorerView(props: ExplorerViewProps) {
     const dropInto = (event: DragEvent, directory: string) => {
         event.preventDefault();
         event.stopPropagation();
-        const source = event.dataTransfer?.getData("application/x-epherolib-workspace");
+        const source = event.dataTransfer?.getData("application/x-datapack-editor-workspace");
         const target = dragged && source === dragged.path && targetFor(dragged, directory);
         if (dragged && target) props.onMove(dragged, target);
         clearDrag();
@@ -197,7 +197,7 @@ function TreeRow(props: TreeRowProps) {
                          return;
                      }
                      event.dataTransfer.effectAllowed = "move";
-                     event.dataTransfer.setData("application/x-epherolib-workspace", entry.path);
+                     event.dataTransfer.setData("application/x-datapack-editor-workspace", entry.path);
                      props.onDragStart(entry);
                  }} onDragEnd={props.onDragEnd}
                  onDragOver={event => {

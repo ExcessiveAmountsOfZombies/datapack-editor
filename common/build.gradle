@@ -28,10 +28,9 @@ dependencies {
     // Fabric and NeoForge both bundle MixinExtras, so it is safe to use it in common.
     compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.5.3'))
 
-    shade("org.spongepowered:configurate-hocon:4.1.2")
-    shade("org.spongepowered:configurate-core:4.1.2")
-    shade("com.typesafe:config:1.4.2")
-    shade("io.leangen.geantyref:geantyref:1.3.14")
+    compileOnly("com.epherical.epherolib:epherolib-common-${epherolib_version}") {
+        transitive = false
+    }
     shade("io.javalin:javalin:7.2.3") {
         exclude group: "org.slf4j", module: "slf4j-api"
         exclude group: "org.ow2.asm" // both loaders already provide ASM...
@@ -39,7 +38,7 @@ dependencies {
 }
 
 def editorUiDirectory = rootProject.file('editor-ui')
-def editorAssetsDirectory = file('src/main/resources/epherolib/editor')
+def editorAssetsDirectory = file('src/main/resources/datapack-editor/editor')
 
 node {
     download = true
@@ -101,13 +100,10 @@ shadowJar {
     archiveClassifier = ""
     enabled = true
     configurations = [project.configurations.shade]
-    relocate("org.spongepowered.configurate", "com.epherical.epherolib.libs.org.spongepowered.configurate")
-    relocate("com.typesafe", "com.epherical.epherolib.libs.com.typesafe")
-    relocate("io.leangen", "com.epherical.epherolib.libs.io.leangen")
-    relocate("io.javalin", "com.epherical.epherolib.libs.io.javalin")
-    relocate("org.eclipse.jetty", "com.epherical.epherolib.libs.org.eclipse.jetty")
-    relocate("jakarta", "com.epherical.epherolib.libs.jakarta")
-    relocate("kotlin", "com.epherical.epherolib.libs.kotlin")
+    relocate("io.javalin", "com.epherical.datapackeditor.libs.io.javalin")
+    relocate("org.eclipse.jetty", "com.epherical.datapackeditor.libs.org.eclipse.jetty")
+    relocate("jakarta", "com.epherical.datapackeditor.libs.jakarta")
+    relocate("kotlin", "com.epherical.datapackeditor.libs.kotlin")
     mergeServiceFiles()
 }
 

@@ -6,6 +6,9 @@ dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation("com.epherical.epherolib:epherolib-fabric-${epherolib_version}") {
+        transitive = false
+    }
 }
 
 loom {

@@ -20,8 +20,8 @@ body,
 }
 
 /* Tailwind preflight is omitted to preserve Monaco's own styles. */
-.monaco-editor.epherolib-json-editor .suggest-widget .suggest-icon.codicon-symbol-field,
-.monaco-editor.epherolib-json-editor .suggest-widget .monaco-list-row:has(.suggest-icon.codicon-symbol-field) .label-name {
+.monaco-editor.datapack-editor-json-editor .suggest-widget .suggest-icon.codicon-symbol-field,
+.monaco-editor.datapack-editor-json-editor .suggest-widget .monaco-list-row:has(.suggest-icon.codicon-symbol-field) .label-name {
   color: #86efac;
 }
 

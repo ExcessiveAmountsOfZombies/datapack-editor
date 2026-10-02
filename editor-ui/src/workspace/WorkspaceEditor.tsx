@@ -571,7 +571,7 @@ export function WorkspaceEditor() {
         registerWorkspaceCompletions();
         editor.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveActiveRef.current());
         const modelListener = editor.current.onDidChangeModel(() => editor.current?.updateOptions({
-            extraEditorClassName: editor.current.getModel()?.getLanguageId() === "json" ? "epherolib-json-editor" : ""
+            extraEditorClassName: editor.current.getModel()?.getLanguageId() === "json" ? "datapack-editor-json-editor" : ""
         }));
         const contentListener = editor.current.onDidChangeModelContent(() => setRevision(value => value + 1));
         const cursorListener = editor.current.onDidChangeCursorPosition(event => setCursor({

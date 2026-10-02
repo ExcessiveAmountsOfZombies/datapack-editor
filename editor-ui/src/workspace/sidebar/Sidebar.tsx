@@ -14,7 +14,7 @@ interface SidebarProps {
     onActiveViewChange: (view: string | null) => void;
 }
 
-const sidebarWidthKey = "epherolib.editor.sidebarWidth";
+const sidebarWidthKey = "datapack-editor.editor.sidebarWidth";
 const defaultSidebarWidth = 280;
 const minSidebarWidth = 180;
 const maxSidebarWidth = 640;

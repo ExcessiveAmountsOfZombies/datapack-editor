@@ -6,7 +6,7 @@ export default defineConfig({
   base: "./",
   plugins: [preact(), tailwindcss()],
   build: {
-    outDir: "../common/src/main/resources/epherolib/editor",
+    outDir: "../common/src/main/resources/datapack-editor/editor",
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022"

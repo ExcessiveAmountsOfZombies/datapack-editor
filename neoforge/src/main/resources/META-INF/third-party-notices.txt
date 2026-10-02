@@ -1,4 +1,4 @@
-EpheroLib editor - third-party notices
+datapack-editor editor - third-party notices
 
 block-model-renderer 2.20.0
 Copyright: 2026 Ewan Howell
@@ -13,10 +13,10 @@ The exact npm distribution, including JavaScript source and bundled assets, is:
 https://registry.npmjs.org/block-model-renderer/-/block-model-renderer-2.20.0.tgz
 
 Upstream: https://github.com/ewanhowell5195/block-model-renderer
-EpheroLib does not modify the upstream renderer source. Vite transforms and
+datapack-editor does not modify the upstream renderer source. Vite transforms and
 minifies the browser distribution for inclusion in the editor build.
 
-The renderer's license applies to its covered files. EpheroLib's own license
+The renderer's license applies to its covered files. datapack-editor's own license
 remains separate. Other bundled dependencies retain their own license notices.
 
 The renderer's WebAssembly helper also includes these MIT-licensed components:

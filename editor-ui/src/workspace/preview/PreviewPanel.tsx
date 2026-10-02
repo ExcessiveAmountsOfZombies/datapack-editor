@@ -6,8 +6,8 @@ interface PreviewPanelProps {
     children: ComponentChildren;
 }
 
-const openKey = "epherolib.editor.visualizerOpen";
-const widthKey = "epherolib.editor.visualizerWidth";
+const openKey = "datapack-editor.editor.visualizerOpen";
+const widthKey = "datapack-editor.editor.visualizerWidth";
 const defaultWidth = 380;
 const minWidth = 280;
 const maxWidth = 900;

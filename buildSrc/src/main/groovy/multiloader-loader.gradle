@@ -29,10 +29,6 @@ dependencies {
     commonJava project(path: ':common', configuration: 'commonJava')
     commonResources project(path: ':common', configuration: 'commonResources')
 
-    shadeRuntime("org.spongepowered:configurate-hocon:4.1.2")
-    shadeRuntime("org.spongepowered:configurate-core:4.1.2")
-    shadeRuntime("com.typesafe:config:1.4.2")
-    shadeRuntime("io.leangen.geantyref:geantyref:1.3.14")
     shadeRuntime("io.javalin:javalin:7.2.3") {
         exclude group: "org.slf4j", module: "slf4j-api"
         exclude group: "org.ow2.asm"
@@ -71,12 +67,9 @@ tasks.named('assemble') {
 
 tasks.named('shadowJar') {
     configurations = [project.configurations.shadeRuntime]
-    relocate("org.spongepowered.configurate", "com.epherical.epherolib.libs.org.spongepowered.configurate")
-    relocate("com.typesafe", "com.epherical.epherolib.libs.com.typesafe")
-    relocate("io.leangen", "com.epherical.epherolib.libs.io.leangen")
-    relocate("io.javalin", "com.epherical.epherolib.libs.io.javalin")
-    relocate("org.eclipse.jetty", "com.epherical.epherolib.libs.org.eclipse.jetty")
-    relocate("jakarta", "com.epherical.epherolib.libs.jakarta")
-    relocate("kotlin", "com.epherical.epherolib.libs.kotlin")
+    relocate("io.javalin", "com.epherical.datapackeditor.libs.io.javalin")
+    relocate("org.eclipse.jetty", "com.epherical.datapackeditor.libs.org.eclipse.jetty")
+    relocate("jakarta", "com.epherical.datapackeditor.libs.jakarta")
+    relocate("kotlin", "com.epherical.datapackeditor.libs.kotlin")
     mergeServiceFiles()
 }

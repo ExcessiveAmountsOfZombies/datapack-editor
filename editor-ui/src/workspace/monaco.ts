@@ -86,7 +86,7 @@ function applyJsonSchemas() {
   const schemas: JsonSchemaRegistration[] = [...tagSchemas, ...dataPackSchemas];
   if (recipeSchema) {
     schemas.push({
-      uri: "epherolib://schemas/recipes.json",
+      uri: "datapack-editor://schemas/recipes.json",
       fileMatch: [
         "file:///**/data/*/recipe/*.json",
         "file:///**/data/*/recipe/**/*.json",

@@ -116,8 +116,8 @@ gradle-app.setting
 
 # Frontend tool caches
 **/.vite/
-**/epherolib-workspace/
-**/resources/epherolib/editor/
+**/datapack-editor-workspace/
+**/resources/datapack-editor/editor/
 
 # Common working directory
 run/
