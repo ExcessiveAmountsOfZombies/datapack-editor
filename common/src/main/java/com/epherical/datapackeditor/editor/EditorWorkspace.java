@@ -53,7 +53,6 @@ public class EditorWorkspace {
             Files.createDirectories(ROOT);
             Path marker = ROOT.resolve(INITIALIZED_FILE);
             if (Files.notExists(marker, LinkOption.NOFOLLOW_LINKS)) {
-                seedExamples();
                 Files.writeString(marker, "datapack-editor editor workspace\n", StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE_NEW);
             }
@@ -350,40 +349,6 @@ public class EditorWorkspace {
 
     private static String relativePath(Path path) {
         return ROOT.relativize(path).toString().replace('\\', '/');
-    }
-
-    private static void seedExamples() throws IOException {
-        Path scripts = createSeedDirectory("scripts");
-        Path data = createSeedDirectory("data");
-        writeExample(data.resolve("example.json"), """
-                {
-                  "type": "minecraft:crafting_shapeless",
-                  "ingredients": [
-                    { "item": "minecraft:coal" },
-                    { "item": "minecraft:coal" }
-                  ],
-                  "result": {
-                    "id": "minecraft:diamond",
-                    "count": 2
-                  }
-                }
-                """);
-    }
-
-    private static Path createSeedDirectory(String name) throws IOException {
-        Path directory = resolveEntry(name);
-        if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) {
-            Files.createDirectory(directory);
-        } else if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Workspace seed path is not a directory: " + name);
-        }
-        return directory;
-    }
-
-    private static void writeExample(Path path, String content) throws IOException {
-        if (Files.notExists(path, LinkOption.NOFOLLOW_LINKS)) {
-            Files.writeString(path, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
-        }
     }
 
     private static void handle(Context context, WorkspaceAction action) {

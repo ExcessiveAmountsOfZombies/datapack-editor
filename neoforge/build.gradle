@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation("com.epherical.epherolib:epherolib-neoforge-${epherolib_version}") {
+    implementation("com.epherical.epherolib:epherolib-neoforge-${epherolib_minecraft_version}:${epherolib_version}") {
         transitive = false
     }
 }
