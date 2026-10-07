@@ -3,16 +3,15 @@ import {ExplorerView, useExplorerState} from "./sidebar/ExplorerView";
 import {CloseIcon, ExplorerIcon, FileGlyph, NotificationIcon, ReadOnlyIcon, SearchIcon, TabCloseIcon} from "./Codicon";
 import {ExportDatapackDialog, type DatapackExportSettings} from "./ExportDatapackDialog";
 import {createNotificationService, type WorkspaceNotification} from "./notifications";
-import {LootPreview} from "./preview/LootPreview";
-import {AdvancementPreview} from "./preview/AdvancementPreview";
+import {LootPreview} from "./preview/loot/LootPreview.tsx";
+import {AdvancementPreview} from "./preview/advancement/AdvancementPreview.tsx";
 import {PreviewPanel} from "./preview/PreviewPanel";
-import {RecipePreview} from "./preview/RecipePreview";
-import {ConfiguredFeaturePreview} from "./preview/ConfiguredFeaturePreview";
-import {featureResource, isConfiguredFeaturePath, type FeatureSettings, type FeatureSimulation} from "./preview/configuredFeature";
-import {type ChestSimulation, isChestLootTablePath, lootTableId} from "./preview/lootTable";
-import {isRecipePath} from "./preview/recipeDocument";
-import {preloadItemAssets} from "./preview/modelRenderer";
-import {isAdvancementPath} from "./preview/advancement";
+import {RecipePreview} from "./preview/recipe/RecipePreview.tsx";
+import {ConfiguredFeaturePreview} from "./preview/features/ConfiguredFeaturePreview.tsx";
+import {featureResource, isConfiguredFeaturePath, type FeatureSettings, type FeatureSimulation} from "./preview/features/configuredFeature.ts";
+import {type ChestSimulation, isChestLootTablePath, lootTableId} from "./preview/loot/lootTable.ts";
+import {isRecipePath} from "./preview/recipe/recipeDocument.ts";
+import {isAdvancementPath} from "./preview/advancement/advancement.ts";
 import {SearchView} from "./sidebar/SearchView";
 import {Sidebar} from "./sidebar/Sidebar";
 import {
@@ -31,9 +30,7 @@ import {
     type WorkspaceTree
 } from "./model";
 import {
-    configureDataPackSchemas,
-    configureRecipeSchema,
-    configureTagSchemas,
+    configureSchemaCatalog,
     registerWorkspaceCompletions,
     type JsonSchemaRegistration,
     monaco
@@ -120,39 +117,24 @@ export function WorkspaceEditor() {
     }, []);
 
     useEffect(() => {
-        preloadItemAssets();
-    }, []);
-
-    useEffect(() => {
-        let cancelled = false;
-        request("/schema/recipes")
-            .then(response => response.json())
-            .then(schema => {
-                if (!cancelled) configureRecipeSchema(schema as object);
-            })
-            .catch(reason => {
-                if (!cancelled) setMessage(`Recipe completions unavailable: ${errorMessage(reason)}`);
-            });
-        request("/schema/tags")
-            .then(response => response.json())
-            .then(response => {
-                const result = response as { schemas?: JsonSchemaRegistration[] };
-                if (!cancelled) configureTagSchemas(result.schemas ?? []);
-            })
-            .catch(reason => {
-                if (!cancelled) setMessage(`Tag completions unavailable: ${errorMessage(reason)}`);
-            });
-        request("/schema/datapack")
-            .then(response => response.json())
-            .then(response => {
-                const result = response as { schemas?: JsonSchemaRegistration[] };
-                if (!cancelled) configureDataPackSchemas(result.schemas ?? []);
-            })
-            .catch(reason => {
-                if (!cancelled) setMessage(`Datapack completions unavailable: ${errorMessage(reason)}`);
-            });
+        const controller = new AbortController();
+        let pending = false;
+        const refresh = async () => {
+            if (pending || controller.signal.aborted) return;
+            pending = true;
+            try {
+                const response = await request("/schema/catalog", {signal: controller.signal});
+                const result = await response.json() as {schemas?: JsonSchemaRegistration[]};
+                if (!controller.signal.aborted) configureSchemaCatalog(result.schemas ?? []);
+            } catch (reason) {
+                if (!controller.signal.aborted) setMessage(`Schema catalog unavailable: ${errorMessage(reason)}`);
+            } finally { pending = false; }
+        };
+        void refresh();
+        const timer = setInterval(() => void refresh(), 10_000);
         return () => {
-            cancelled = true;
+            controller.abort();
+            clearInterval(timer);
         };
     }, []);
 
@@ -563,7 +545,7 @@ export function WorkspaceEditor() {
             fontSize: 14,
             lineHeight: 22,
             minimap: {enabled: false},
-            padding: {top: 14, bottom: 14},
+                padding: {top: 14, bottom: 14},
             scrollBeyondLastLine: false,
             smoothScrolling: true,
             tabSize: 2

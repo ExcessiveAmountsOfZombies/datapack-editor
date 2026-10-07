@@ -1,21 +1,24 @@
 package com.epherical.datapackeditor.editor;
 
-import com.epherical.datapackeditor.impl.DataPackSchemaImpl;
-import com.epherical.datapackeditor.impl.schemas.RecipeSchemaBuilder;
-import com.epherical.datapackeditor.impl.schemas.TagSchemaBuilder;
+import com.epherical.datapackeditor.DatapackEditorConstants;
+import com.epherical.datapackeditor.editor.assets.EditorAssets;
+import com.epherical.datapackeditor.editor.assets.EditorDatapacks;
+import com.epherical.datapackeditor.editor.assets.EditorSchemas;
+import com.epherical.datapackeditor.editor.assets.EditorStaticFiles;
+import com.epherical.datapackeditor.editor.feature.EditorConfiguredFeaturePreview;
+import com.epherical.datapackeditor.editor.loot.EditorLootSimulation;
+import com.epherical.datapackeditor.editor.recipe.EditorIngredientPreview;
+import com.epherical.datapackeditor.editor.recipe.EditorRecipeCatalog;
+import com.epherical.datapackeditor.editor.recipe.EditorRecipePreview;
 import io.javalin.Javalin;
-import io.javalin.http.staticfiles.Location;
 import net.minecraft.server.MinecraftServer;
 
 public class EditorWebServer {
-    public static final String HOST = "127.0.0.1";
-    public static final int PORT = 8700;
 
-    public static final String CACHE_CONTROL = "Cache-Control";
-    public static final String NO_STORE = "no-store";
-    public static final String CONTENT_TYPE = "application/json";
-    public static final String HTTP = "http://";
     private static Javalin application;
+    private static EditorAssets assets;
+    private static MemoryChecker memoryWatcher;
+    private static EditorSchemas schemas;
 
     public static synchronized StartResult start(MinecraftServer server) {
         if (application != null) {
@@ -23,15 +26,23 @@ public class EditorWebServer {
         }
 
         Javalin newApplication = null;
+        EditorAssets newAssets = null;
+        MemoryChecker newMemoryWatcher = null;
+        EditorSchemas newSchemas = null;
         try {
+            newMemoryWatcher = new MemoryChecker(EditorWebServer::stopForPressure);
+            memoryWatcher = newMemoryWatcher;
+            newMemoryWatcher.start();
+            MemoryChecker configuredMemoryWatcher = newMemoryWatcher;
             EditorWorkspace.initialize();
             EditorDatapacks datapacks = EditorDatapacks.create(server);
+            newAssets = new EditorAssets(server);
+            EditorAssets configuredAssets = newAssets;
+            newSchemas = new EditorSchemas(server);
+            EditorSchemas configuredSchemas = newSchemas;
             newApplication = Javalin.create(config -> {
-                config.staticFiles.add(files -> {
-                    files.hostedPath = "/";
-                    files.directory = "/datapack-editor/editor";
-                    files.location = Location.CLASSPATH;
-                });
+                configuredMemoryWatcher.register(config);
+                EditorStaticFiles.register(config);
 
                 config.routes.before(ctx -> {
                     ctx.header("X-Content-Type-Options", "nosniff");
@@ -42,24 +53,10 @@ public class EditorWebServer {
                                     img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:
                                     """);
                 });
-                config.routes.get("/api/status", ctx -> ctx
-                        .contentType(CONTENT_TYPE)
-                        .result(statusJson()));
-                config.routes.get("/api/schema/recipes", ctx -> ctx
-                        .header(CACHE_CONTROL, NO_STORE)
-                        .contentType("application/schema+json")
-                        .result(RecipeSchemaBuilder.build(server)));
-                config.routes.get("/api/schema/tags", ctx -> ctx
-                        .header(CACHE_CONTROL, NO_STORE)
-                        .contentType(CONTENT_TYPE)
-                        .result(TagSchemaBuilder.build(server.registryAccess())));
-                config.routes.get("/api/schema/datapack", ctx -> ctx
-                        .header(CACHE_CONTROL, NO_STORE)
-                        .contentType(CONTENT_TYPE)
-                        .result(DataPackSchemaImpl.build(server.registryAccess())));
+                configuredSchemas.registerRoutes(config);
                 EditorWorkspace.registerRoutes(config);
                 datapacks.registerRoutes(config);
-                new EditorAssets(server).registerRoutes(config);
+                configuredAssets.registerRoutes(config);
                 new EditorLootSimulation(server).registerRoutes(config);
                 new EditorRecipeCatalog(server).registerRoutes(config);
                 new EditorIngredientPreview(server).registerRoutes(config);
@@ -72,14 +69,16 @@ public class EditorWebServer {
                 //  fairly easily though...
                 // todo; tag visualizer? eh
 
-
                 // todo; probably more of a feature, but what if you could edit the file by also clicking on buttons
                 //  does it reference the json schema we created? probably the best way to handle it, in a generic fashion...
             });
-            newApplication.start(HOST, PORT);
+            newApplication.start(DatapackEditorConstants.HTTP_LOOPBACK_HOST, DatapackEditorConstants.EDITOR_HTTP_PORT);
             application = newApplication;
+            assets = newAssets;
+            schemas = newSchemas;
             return new StartResult(true, editorUrl());
         } catch (RuntimeException | LinkageError exception) {
+            if (newSchemas != null) newSchemas.close();
             if (newApplication != null) {
                 try {
                     newApplication.stop();
@@ -87,6 +86,9 @@ public class EditorWebServer {
                     // Preserve the startup exception, which contains the useful cause.
                 }
             }
+            if (newAssets != null) newAssets.close();
+            if (newMemoryWatcher != null) newMemoryWatcher.close();
+            memoryWatcher = null;
             throw exception;
         }
     }
@@ -98,7 +100,16 @@ public class EditorWebServer {
 
         Javalin runningApplication = application;
         application = null;
-        runningApplication.stop();
+        if (schemas != null) schemas.close();
+        schemas = null;
+        try {
+            runningApplication.stop();
+        } finally {
+            if (assets != null) assets.close();
+            assets = null;
+            if (memoryWatcher != null) memoryWatcher.close();
+            memoryWatcher = null;
+        }
         return true;
     }
 
@@ -106,22 +117,12 @@ public class EditorWebServer {
         return application != null;
     }
 
-    public static synchronized String editorUrl() {
-        return HTTP + HOST + ":" + PORT + "/";
+    private static synchronized void stopForPressure() {
+        if (memoryWatcher != null && memoryWatcher.isTripped()) stop();
     }
 
-    private static String statusJson() {
-        return """
-                {
-                  "name": "datapack-editor",
-                  "state": "running",
-                  "host": "%s",
-                  "port": %d,
-                  "security": "loopback",
-                  "workspace": "%s",
-                  "features": ["Preact", "Tailwind CSS", "Monaco", "Three.js"]
-                }
-                """.formatted(HOST, PORT, EditorWorkspace.DIRECTORY_NAME);
+    public static synchronized String editorUrl() {
+        return "http://" + DatapackEditorConstants.HTTP_LOOPBACK_HOST + ":" + DatapackEditorConstants.EDITOR_HTTP_PORT + DatapackEditorConstants.PATH_SEPARATOR;
     }
 
     public record StartResult(boolean started, String url) {}

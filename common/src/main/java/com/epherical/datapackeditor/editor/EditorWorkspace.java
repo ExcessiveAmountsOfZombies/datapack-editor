@@ -1,5 +1,6 @@
 package com.epherical.datapackeditor.editor;
 
+import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
@@ -29,21 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class EditorWorkspace {
-    public static final String DIRECTORY_NAME = "workspace";
-
-    private static final int MAX_ENTRIES = 2_000;
-    private static final int MAX_DEPTH = 24;
-    private static final long MAX_FILE_BYTES = 2L * 1024L * 1024L;
-    private static final String INITIALIZED_FILE = ".datapack-editor-initialized";
     private static final Set<String> EDITABLE_EXTENSIONS = Set.of(
-            "js", "json", "txt", "md", "mcfunction", "properties", "toml", "yaml", "yml"
+            "js", "json", "txt", "md", "mcfunction", DatapackEditorConstants.JSON_PROPERTIES, "toml", "yaml", "yml"
     );
-    private static final Path ROOT = Path.of(DIRECTORY_NAME).toAbsolutePath().normalize();
-    public static final String WORKSPACE_FILE_TOO_LARGE = "File is larger than 2 MiB";
-    public static final String CREATED = "created";
-    public static final String SAVED = "saved";
-    public static final String PATH = "path";
-    public static final String TARGET = "target";
+    private static final Path ROOT = Path.of(DatapackEditorConstants.PATH_WORKSPACE).toAbsolutePath().normalize();
 
     public static void initialize() {
         try {
@@ -51,21 +41,21 @@ public class EditorWorkspace {
                 throw new IOException("The editor workspace cannot be a symbolic link");
             }
             Files.createDirectories(ROOT);
-            Path marker = ROOT.resolve(INITIALIZED_FILE);
+            Path marker = ROOT.resolve(DatapackEditorConstants.PATH_WORKSPACE_INITIALIZED);
             if (Files.notExists(marker, LinkOption.NOFOLLOW_LINKS)) {
                 Files.writeString(marker, "datapack-editor editor workspace\n", StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE_NEW);
             }
         } catch (IOException exception) {
-            throw new UncheckedIOException("Could not initialize " + DIRECTORY_NAME, exception);
+            throw new UncheckedIOException("Could not initialize " + DatapackEditorConstants.PATH_WORKSPACE, exception);
         }
     }
 
     public static void registerRoutes(JavalinConfig config) {
         config.routes.get("/api/workspace", EditorWorkspace::listWorkspace);
-        config.routes.get("/api/file", EditorWorkspace::readFile);
-        config.routes.put("/api/file", EditorWorkspace::saveFile);
-        config.routes.post("/api/file", EditorWorkspace::createFile);
+        config.routes.get(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::readFile);
+        config.routes.put(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::saveFile);
+        config.routes.post(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::createFile);
         config.routes.post("/api/folder", EditorWorkspace::createFolder);
         config.routes.post("/api/move", EditorWorkspace::moveEntry);
         config.routes.post("/api/export-datapack", EditorWorkspace::exportDatapack);
@@ -76,9 +66,9 @@ public class EditorWorkspace {
         Path file = resolveEntry(workspacePath);
         requireEditableExtension(file);
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_FILE_BYTES) {
+        if (bytes.length > DatapackEditorConstants.EDITOR_JSON_MAX_BYTES) {
             // do we need this?
-            throw new WorkspaceException(WORKSPACE_FILE_TOO_LARGE);
+            throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
         }
         if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)
                 && !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -87,7 +77,7 @@ public class EditorWorkspace {
 
         Files.createDirectories(file.getParent());
         rejectSymbolicLinks(file);
-        Path temporary = Files.createTempFile(file.getParent(), ".datapack-editor-override-", ".tmp");
+        Path temporary = Files.createTempFile(file.getParent(), DatapackEditorConstants.PATH_WORKSPACE_OVERRIDE_PREFIX, DatapackEditorConstants.PATH_TEMP_EXTENSION);
         writeFile(file, bytes, temporary);
         return relativePath(file);
     }
@@ -109,24 +99,24 @@ public class EditorWorkspace {
     private static synchronized void listWorkspace(Context context) {
         handle(context, () -> {
             StringBuilder json = new StringBuilder("{\"root\":\"")
-                    .append(jsonEscape(DIRECTORY_NAME))
+                    .append(jsonEscape(DatapackEditorConstants.PATH_WORKSPACE))
                     .append("\",\"entries\":[");
             AtomicInteger count = new AtomicInteger();
             appendChildren(json, ROOT, 0, count);
             json.append("]}");
-            context.contentType("application/json").result(json.toString());
+            context.contentType(DatapackEditorConstants.HTTP_JSON).result(json.toString());
         });
     }
 
     private static synchronized void readFile(Context context) {
         handle(context, () -> {
-            Path file = resolveEntry(requiredQuery(context, PATH));
+            Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableFile(file);
             long size = Files.size(file);
-            if (size > MAX_FILE_BYTES) {
-                throw new WorkspaceException(WORKSPACE_FILE_TOO_LARGE);
+            if (size > DatapackEditorConstants.EDITOR_JSON_MAX_BYTES) {
+                throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
             }
-            context.header("Cache-Control", "no-store")
+            context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE)
                     .contentType("text/plain; charset=utf-8")
                     .result(Files.readString(file, StandardCharsets.UTF_8));
         });
@@ -134,44 +124,44 @@ public class EditorWorkspace {
 
     private static synchronized void saveFile(Context context) {
         handle(context, () -> {
-            Path file = resolveEntry(requiredQuery(context, PATH));
+            Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableFile(file);
             byte[] content = context.body().getBytes(StandardCharsets.UTF_8);
-            if (content.length > MAX_FILE_BYTES) {
-                throw new WorkspaceException(WORKSPACE_FILE_TOO_LARGE);
+            if (content.length > DatapackEditorConstants.EDITOR_JSON_MAX_BYTES) {
+                throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
             }
 
-            Path temporary = Files.createTempFile(file.getParent(), ".datapack-editor-save-", ".tmp");
+            Path temporary = Files.createTempFile(file.getParent(), DatapackEditorConstants.PATH_WORKSPACE_SAVE_PREFIX, DatapackEditorConstants.PATH_TEMP_EXTENSION);
             writeFile(file, content, temporary);
-            success(context, SAVED, relativePath(file));
+            success(context, "saved", relativePath(file));
         });
     }
 
     private static synchronized void createFile(Context context) {
         handle(context, () -> {
-            Path file = resolveEntry(requiredQuery(context, PATH));
+            Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableExtension(file);
             requireExistingParent(file);
             Files.createFile(file);
             context.status(HttpStatus.CREATED);
-            success(context, CREATED, relativePath(file));
+            success(context, DatapackEditorConstants.JSON_CREATED, relativePath(file));
         });
     }
 
     private static synchronized void createFolder(Context context) {
         handle(context, () -> {
-            Path folder = resolveEntry(requiredQuery(context, PATH));
+            Path folder = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireExistingParent(folder);
             Files.createDirectory(folder);
             context.status(HttpStatus.CREATED);
-            success(context, CREATED, relativePath(folder));
+            success(context, DatapackEditorConstants.JSON_CREATED, relativePath(folder));
         });
     }
 
     private static synchronized void moveEntry(Context context) {
         handle(context, () -> {
-            Path source = resolveEntry(requiredQuery(context, PATH));
-            Path target = resolveEntry(requiredQuery(context, TARGET));
+            Path source = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
+            Path target = resolveEntry(requiredQuery(context, "target"));
             requireExistingEntry(source);
             if (Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)
                     && !source.getFileName().equals(target.getFileName())) {
@@ -193,9 +183,9 @@ public class EditorWorkspace {
             } catch (JsonParseException exception) {
                 throw new WorkspaceException("Export settings must be valid JSON");
             }
-            String name = requiredString(request, "name");
-            String description = requiredString(request, "description");
-            if (request.has("files")) {
+            String name = requiredString(request, DatapackEditorConstants.JSON_NAME);
+            String description = requiredString(request, DatapackEditorConstants.JSON_DESCRIPTION);
+            if (request.has(DatapackEditorConstants.JSON_FILES)) {
                 throw new WorkspaceException("Export uses saved workspace files. Save changes before exporting.");
             }
             Path exported;
@@ -223,7 +213,7 @@ public class EditorWorkspace {
 
     private static synchronized void deleteEntry(Context context) {
         handle(context, () -> {
-            Path entry = resolveEntry(requiredQuery(context, PATH));
+            Path entry = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireExistingEntry(entry);
             try (Stream<Path> paths = Files.walk(entry)) {
                 for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
@@ -236,13 +226,13 @@ public class EditorWorkspace {
 
     private static void appendChildren(StringBuilder json, Path directory, int depth, AtomicInteger count)
             throws IOException {
-        if (depth > MAX_DEPTH) {
-            throw new WorkspaceException("Workspace nesting is too deep");
+        if (depth > DatapackEditorConstants.WORKSPACE_MAX_DEPTH) {
+            throw new WorkspaceException("Workspace nesting is too deep (maximum " + DatapackEditorConstants.WORKSPACE_MAX_DEPTH + ")");
         }
 
         try (Stream<Path> children = Files.list(directory)) {
             var ordered = children
-                    .filter(path -> !path.getFileName().toString().equals(INITIALIZED_FILE))
+                    .filter(path -> !path.getFileName().toString().equals(DatapackEditorConstants.PATH_WORKSPACE_INITIALIZED))
                     .filter(path -> !Files.isSymbolicLink(path))
                     .sorted(Comparator
                             .comparing((Path path) -> !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
@@ -250,8 +240,8 @@ public class EditorWorkspace {
                     .toList();
             boolean first = true;
             for (Path child : ordered) {
-                if (count.incrementAndGet() > MAX_ENTRIES) {
-                    throw new WorkspaceException("Workspace contains more than " + MAX_ENTRIES + " entries");
+                if (count.incrementAndGet() > DatapackEditorConstants.WORKSPACE_MAX_ENTRIES) {
+                    throw new WorkspaceException("Workspace contains more than " + DatapackEditorConstants.WORKSPACE_MAX_ENTRIES + " entries");
                 }
                 if (!first) {
                     json.append(',');
@@ -279,15 +269,15 @@ public class EditorWorkspace {
         }
         try {
             Path relative = Path.of(rawPath.replace('\\', '/')).normalize();
-            if (relative.isAbsolute() || relative.startsWith("..") || relative.toString().isBlank()) {
-                throw new WorkspaceException("Path must stay inside the editor workspace");
+            if (relative.isAbsolute() || relative.startsWith(DatapackEditorConstants.PATH_PARENT_DIRECTORY) || relative.toString().isBlank()) {
+                throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_PATH_OUTSIDE_ROOT);
             }
-            if (relative.getNameCount() == 1 && relative.getFileName().toString().equals(INITIALIZED_FILE)) {
+            if (relative.getNameCount() == 1 && relative.getFileName().toString().equals(DatapackEditorConstants.PATH_WORKSPACE_INITIALIZED)) {
                 throw new WorkspaceException("That workspace path is reserved");
             }
             Path resolved = ROOT.resolve(relative).normalize();
             if (!resolved.startsWith(ROOT)) {
-                throw new WorkspaceException("Path must stay inside the editor workspace");
+                throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_PATH_OUTSIDE_ROOT);
             }
             rejectSymbolicLinks(resolved);
             return resolved;
@@ -368,12 +358,12 @@ public class EditorWorkspace {
     }
 
     private static void success(Context context, String operation, String path) {
-        context.contentType("application/json").result("{\"operation\":\"" + jsonEscape(operation)
+        context.contentType(DatapackEditorConstants.HTTP_JSON).result("{\"operation\":\"" + jsonEscape(operation)
                 + "\",\"path\":\"" + jsonEscape(path) + "\"}");
     }
 
     private static void error(Context context, HttpStatus status, String message) {
-        context.status(status).contentType("application/json")
+        context.status(status).contentType(DatapackEditorConstants.HTTP_JSON)
                 .result("{\"error\":\"" + jsonEscape(message) + "\"}");
     }
 

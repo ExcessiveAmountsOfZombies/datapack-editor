@@ -10,11 +10,10 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
-@Mod(ModConstants.MOD_ID)
+@Mod(DatapackEditorConstants.MOD_ID)
 public class DatapackEditorNeoForge {
 
     private static DatapackEditorNeoForge mod;
-
 
     public DatapackEditorNeoForge() {
         mod = this;

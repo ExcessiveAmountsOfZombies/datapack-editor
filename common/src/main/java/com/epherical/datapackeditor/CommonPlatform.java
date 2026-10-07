@@ -1,6 +1,6 @@
 package com.epherical.datapackeditor;
 
-import com.epherical.datapackeditor.api.schema.DataPackSchemaRegistration;
+import com.epherical.datapackeditor.api.DataPackRegistration;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema;
 import com.mojang.serialization.Codec;
 import com.google.gson.JsonElement;
@@ -54,15 +54,14 @@ public abstract class CommonPlatform<T> {
         return RegistryDataLoader.WORLDGEN_REGISTRIES;
     }
 
-    /** Additional loader resources whose codecs or paths are discovered at runtime. */
-    public List<DataPackSchemaRegistration> datapackSchemas() {
+    /** Loader resources discovered at runtime, with their optional schemas in each registration. */
+    public List<DataPackRegistration> datapackResources() {
         return List.of();
     }
 
     public void configureDatapackSchema(CodecJsonSchema.Builder builder, Codec<?> codec) {
     }
 
-    /** Decodes a preview table using this loader's conditions and table identity. */
     public LootTable previewLootTable(MinecraftServer server, Identifier id, JsonElement definition) {
         return LootTable.DIRECT_CODEC.parse(previewOps(server), definition).getOrThrow(JsonParseException::new);
     }

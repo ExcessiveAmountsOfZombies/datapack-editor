@@ -9,12 +9,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 public class DatapackEditorFabric implements ModInitializer {
 
-
     @Override
     public void onInitialize() {
         CommonPlatform.create(new FabricPlatform());
         ComponentSchemaRegister.register();
-
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 EditorCommands.register(dispatcher));

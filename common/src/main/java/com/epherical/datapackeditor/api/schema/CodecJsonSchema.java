@@ -1,5 +1,7 @@
 package com.epherical.datapackeditor.api.schema;
 
+import com.epherical.datapackeditor.DatapackEditorConstants;
+import com.epherical.datapackeditor.api.DataPackRegistration;
 import com.epherical.datapackeditor.impl.CodecJsonSchemaImpl;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -25,7 +27,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Most codecs require no integration. Addons can supply exact schemas, live
  * registry associations, post-inference adapters, or complete runtime providers
  * for opaque and recursive codecs. {@link Builder} configures one datapack
- * registration through {@link DataPackSchemaRegistration.Builder#configure(Consumer)}.
+ * registration through {@link DataPackRegistration.Builder#configure(Consumer)}.
  * Register global extensions during common mod initialization, before the
  * editor requests schemas. Registration keys use codec instance identity:
  * pass the exact codec instance retained by the containing codec graph.
@@ -56,10 +58,6 @@ public class CodecJsonSchema {
     public interface SchemaInspector {
         JsonElement inspect(SchemaContext context, Object codec);
     }
-
-
-    public static final String CODEC = "codec";
-    public static final String SCHEMA = "schema";
 
     /**
      * Supplies an exact schema for a codec whose internal structure is opaque.
@@ -150,8 +148,8 @@ public class CodecJsonSchema {
     }
 
     private static void registerOverride(Object codec, JsonElement schema) {
-        Object key = Objects.requireNonNull(codec, CODEC);
-        JsonElement value = Objects.requireNonNull(schema, SCHEMA).deepCopy();
+        Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+        JsonElement value = Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA).deepCopy();
         synchronized (CodecJsonSchema.class) {
             OVERRIDES.put(key, value);
             REGISTRY_OVERRIDES.remove(key);
@@ -160,8 +158,8 @@ public class CodecJsonSchema {
     }
 
     private static void registerGlobalProvider(Object codec, SchemaProvider provider) {
-        Object key = Objects.requireNonNull(codec, CODEC);
-        SchemaProvider value = Objects.requireNonNull(provider, "provider");
+        Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+        SchemaProvider value = Objects.requireNonNull(provider, DatapackEditorConstants.JSON_PROVIDER);
         synchronized (CodecJsonSchema.class) {
             PROVIDERS.put(key, value);
             OVERRIDES.remove(key);
@@ -170,18 +168,18 @@ public class CodecJsonSchema {
     }
 
     private static void registerGlobalAdapter(Object codec, SchemaAdapter adapter) {
-        Object key = Objects.requireNonNull(codec, CODEC);
-        SchemaAdapter value = Objects.requireNonNull(adapter, "adapter");
+        Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+        SchemaAdapter value = Objects.requireNonNull(adapter, DatapackEditorConstants.JSON_ADAPTER);
         ADAPTERS.merge(key, value, CodecJsonSchema::composeAdapters);
     }
 
     private static SchemaAdapter composeAdapters(SchemaAdapter first, SchemaAdapter second) {
-        return (context, inferred) -> second.adapt(context, Objects.requireNonNull(first.adapt(context, inferred), "Schema adapter returned null"));
+        return (context, inferred) -> second.adapt(context, Objects.requireNonNull(first.adapt(context, inferred), DatapackEditorConstants.MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL));
     }
 
     private static void registerGlobalRegistry(Object codec, ResourceKey<? extends Registry<?>> registry, boolean includeTags) {
-        Object key = Objects.requireNonNull(codec, CODEC);
-        CodecJsonSchemaImpl.RegistryOverride value = new CodecJsonSchemaImpl.RegistryOverride(Objects.requireNonNull(registry, "registry"), includeTags);
+        Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+        CodecJsonSchemaImpl.RegistryOverride value = new CodecJsonSchemaImpl.RegistryOverride(Objects.requireNonNull(registry, DatapackEditorConstants.JSON_REGISTRY), includeTags);
         synchronized (CodecJsonSchema.class) {
             REGISTRY_OVERRIDES.put(key, value);
             OVERRIDES.remove(key);
@@ -306,27 +304,27 @@ public class CodecJsonSchema {
         }
 
         private void registerOverride(Object codec, JsonElement schema) {
-            Object key = Objects.requireNonNull(codec, CODEC);
-            overrides.put(key, Objects.requireNonNull(schema, SCHEMA).deepCopy());
+            Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+            overrides.put(key, Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA).deepCopy());
             registryOverrides.remove(key);
             providers.remove(key);
         }
 
         private void selectProvider(Object codec, SchemaProvider provider) {
-            Object key = Objects.requireNonNull(codec, CODEC);
-            providers.put(key, Objects.requireNonNull(provider, "provider"));
+            Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+            providers.put(key, Objects.requireNonNull(provider, DatapackEditorConstants.JSON_PROVIDER));
             overrides.remove(key);
             registryOverrides.remove(key);
         }
 
         private void selectAdapter(Object codec, SchemaAdapter adapter) {
-            Object key = Objects.requireNonNull(codec, CODEC);
-            adapters.merge(key, Objects.requireNonNull(adapter, "adapter"), CodecJsonSchema::composeAdapters);
+            Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+            adapters.merge(key, Objects.requireNonNull(adapter, DatapackEditorConstants.JSON_ADAPTER), CodecJsonSchema::composeAdapters);
         }
 
         private void selectRegistry(Object codec, ResourceKey<? extends Registry<?>> registry, boolean includeTags) {
-            Object key = Objects.requireNonNull(codec, CODEC);
-            registryOverrides.put(key, new CodecJsonSchemaImpl.RegistryOverride(Objects.requireNonNull(registry, "registry"), includeTags));
+            Object key = Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC);
+            registryOverrides.put(key, new CodecJsonSchemaImpl.RegistryOverride(Objects.requireNonNull(registry, DatapackEditorConstants.JSON_REGISTRY), includeTags));
             overrides.remove(key);
             providers.remove(key);
         }
@@ -341,7 +339,7 @@ public class CodecJsonSchema {
          * @return this builder
          */
         public Builder annotate(String propertyPath, JsonSchemaAnnotation annotation) {
-            Objects.requireNonNull(annotation, "annotation");
+            Objects.requireNonNull(annotation, DatapackEditorConstants.JSON_ANNOTATION);
             return enhance((schema, ignored) -> annotation.apply(schema, propertyPath));
         }
 
@@ -395,12 +393,12 @@ public class CodecJsonSchema {
          * @return the modified root schema
          */
         public JsonObject enhance(JsonObject schema) {
-            return finish(Objects.requireNonNull(schema, SCHEMA));
+            return finish(Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA));
         }
 
         private JsonObject finish(JsonObject schema) {
             enhancers.forEach(enhancer -> enhancer.enhance(schema, registries));
-            return schema;
+            return CodecJsonSchemaImpl.pruneDefinitions(schema);
         }
     }
 
@@ -457,6 +455,11 @@ public class CodecJsonSchema {
             return generator.registries;
         }
 
+        /** Checks cancellation and the compiler's time/work budgets during extension loops. */
+        public void checkpoint() {
+            generator.checkpoint();
+        }
+
         /**
          * Infers a schema for a codec referenced by the adapter.
          *
@@ -464,7 +467,7 @@ public class CodecJsonSchema {
          * @return a copy of the inferred schema
          */
         public JsonElement schema(Codec<?> codec) {
-            return generator.infer(Objects.requireNonNull(codec, CODEC)).deepCopy();
+            return generator.infer(Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC)).deepCopy();
         }
 
         /**
@@ -474,7 +477,7 @@ public class CodecJsonSchema {
          * @return a copy of the inferred schema
          */
         public JsonElement schema(MapCodec<?> codec) {
-            return generator.infer(Objects.requireNonNull(codec, CODEC)).deepCopy();
+            return generator.infer(Objects.requireNonNull(codec, DatapackEditorConstants.JSON_CODEC)).deepCopy();
         }
 
         /**
@@ -484,7 +487,7 @@ public class CodecJsonSchema {
          * @return a copy of the resolved schema
          */
         public JsonElement resolve(JsonElement schema) {
-            return generator.resolve(Objects.requireNonNull(schema, SCHEMA)).deepCopy();
+            return generator.resolve(Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA)).deepCopy();
         }
 
         /**
@@ -494,7 +497,7 @@ public class CodecJsonSchema {
          * @return a registry-backed schema reference
          */
         public JsonElement registry(ResourceKey<? extends Registry<?>> registry, boolean includeTags) {
-            return generator.registryReference(Objects.requireNonNull(registry, "registry"), includeTags).deepCopy();
+            return generator.registryReference(Objects.requireNonNull(registry, DatapackEditorConstants.JSON_REGISTRY), includeTags).deepCopy();
         }
 
         /**
@@ -512,6 +515,21 @@ public class CodecJsonSchema {
         }
 
         /**
+         * Shares a definition for a dynamically recreated codec family. Keys use
+         * {@link Object#equals(Object)} and {@link Object#hashCode()} and must
+         * include every parameter that changes validation. They remain local to
+         * this builder. Equivalent keys reuse an in-progress definition, too.
+         * Do not use codec debug strings as keys or omit element codec identity.
+         *
+         * @param key immutable family key, including the codec family's identity
+         * @param schema supplier evaluated once for an equal key
+         * @return a fresh local reference to the shared definition
+         */
+        public JsonElement sharedDefinition(Object key, Supplier<? extends JsonElement> schema) {
+            return generator.sharedDefinition(key, schema);
+        }
+
+        /**
          * Adds metadata to properties reachable from an adapter's schema. Local
          * definitions owned by the current generation run are resolved as part
          * of the property path.
@@ -522,26 +540,26 @@ public class CodecJsonSchema {
          * @return the number of matching schema properties
          */
         public int annotate(JsonElement schema, String propertyPath, JsonSchemaAnnotation annotation) {
-            Objects.requireNonNull(schema, SCHEMA);
-            Objects.requireNonNull(propertyPath, "propertyPath");
-            Objects.requireNonNull(annotation, "annotation");
+            Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA);
+            Objects.requireNonNull(propertyPath, DatapackEditorConstants.SCHEMA_PROPERTY_PATH);
+            Objects.requireNonNull(annotation, DatapackEditorConstants.JSON_ANNOTATION);
             if (propertyPath.isEmpty()) {
                 if (!schema.isJsonObject()) return 0;
                 JsonObject target = schema.getAsJsonObject();
-                if (target.has("$ref")) {
+                if (target.has(DatapackEditorConstants.SCHEMA_REF)) {
                     JsonObject referenced = target.deepCopy();
                     target.entrySet().clear();
                     JsonArray composition = new JsonArray();
                     composition.add(referenced);
-                    target.add("allOf", composition);
+                    target.add(DatapackEditorConstants.SCHEMA_ALL_OF, composition);
                 }
                 return annotation.apply(target, "");
             }
             JsonObject document = new JsonObject();
             JsonArray allOf = new JsonArray();
             allOf.add(schema);
-            document.add("allOf", allOf);
-            document.add("definitions", generator.definitions);
+            document.add(DatapackEditorConstants.SCHEMA_ALL_OF, allOf);
+            document.add(DatapackEditorConstants.SCHEMA_DEFINITIONS, generator.definitions);
             return annotation.apply(document, propertyPath);
         }
     }

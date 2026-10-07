@@ -1,5 +1,6 @@
 package com.epherical.datapackeditor.editor;
 
+import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.epherical.datapackeditor.editor.EditorWorkspace.WorkspaceException;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -18,8 +19,6 @@ import java.util.zip.ZipOutputStream;
 import java.util.stream.Stream;
 
 public class EditorDatapackExport {
-    public static final String DIRECTORY_NAME = "workspace-exported-datapacks";
-    private static final String METADATA_FILE = "pack.mcmeta";
 
     public static Path export(Path workspace, String name, String description)
             throws IOException {
@@ -38,7 +37,7 @@ public class EditorDatapackExport {
                 throw new WorkspaceException("Datapack exports cannot contain symbolic links or special files");
             }
         }
-        Path directory = workspace.resolveSibling(DIRECTORY_NAME);
+        Path directory = workspace.resolveSibling("workspace-exported-datapacks");
         if (Files.isSymbolicLink(directory)) {
             throw new WorkspaceException("The export directory cannot be a symbolic link");
         }
@@ -47,18 +46,18 @@ public class EditorDatapackExport {
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new WorkspaceException("An exported datapack already exists with that name. Choose another name.");
         }
-        Path temporary = Files.createTempFile(directory, ".datapack-editor-export-", ".tmp");
+        Path temporary = Files.createTempFile(directory, ".datapack-editor-export-", DatapackEditorConstants.PATH_TEMP_EXTENSION);
         try {
             try (OutputStream output = Files.newOutputStream(temporary, StandardOpenOption.TRUNCATE_EXISTING);
                  ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-                zip.putNextEntry(new ZipEntry(METADATA_FILE));
+                zip.putNextEntry(new ZipEntry(DatapackEditorConstants.PATH_PACK_METADATA));
                 zip.write(metadata(description).getBytes(StandardCharsets.UTF_8));
                 zip.closeEntry();
                 for (Path entry : entries) {
                     String relative = workspace.relativize(entry).toString().replace('\\', '/');
-                    if (relative.equals(METADATA_FILE)) continue;
+                    if (relative.equals(DatapackEditorConstants.PATH_PACK_METADATA)) continue;
                     boolean folder = Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS);
-                    zip.putNextEntry(new ZipEntry(relative + (folder ? "/" : "")));
+                    zip.putNextEntry(new ZipEntry(relative + (folder ? DatapackEditorConstants.PATH_SEPARATOR : "")));
                     if (!folder) {
                         try (var input = Files.newInputStream(entry, LinkOption.NOFOLLOW_LINKS)) {
                             input.transferTo(zip);
@@ -76,23 +75,23 @@ public class EditorDatapackExport {
 
     private static boolean isInternalFile(Path path) {
         String name = path.getFileName().toString();
-        return name.equals(".datapack-editor-initialized")
-                || (name.startsWith(".datapack-editor-save-") || name.startsWith(".datapack-editor-override-"))
-                && name.endsWith(".tmp");
+        return name.equals(DatapackEditorConstants.PATH_WORKSPACE_INITIALIZED)
+                || (name.startsWith(DatapackEditorConstants.PATH_WORKSPACE_SAVE_PREFIX) || name.startsWith(DatapackEditorConstants.PATH_WORKSPACE_OVERRIDE_PREFIX))
+                && name.endsWith(DatapackEditorConstants.PATH_TEMP_EXTENSION);
     }
 
     private static String zipName(String name) {
         String stem = name.trim();
-        if (stem.toLowerCase(Locale.ROOT).endsWith(".zip")) stem = stem.substring(0, stem.length() - 4);
-        if (stem.isBlank() || stem.contains("/") || stem.contains("\\")) {
+        if (stem.toLowerCase(Locale.ROOT).endsWith(DatapackEditorConstants.PATH_ZIP_EXTENSION)) stem = stem.substring(0, stem.length() - DatapackEditorConstants.PATH_ZIP_EXTENSION.length());
+        if (stem.isBlank() || stem.contains(DatapackEditorConstants.PATH_SEPARATOR) || stem.contains(DatapackEditorConstants.PATH_WINDOWS_SEPARATOR)) {
             throw new WorkspaceException("Enter a ZIP filename without path separators");
         }
-        return stem + ".zip";
+        return stem + DatapackEditorConstants.PATH_ZIP_EXTENSION;
     }
 
     private static String metadata(String description) {
         JsonObject pack = new JsonObject();
-        pack.addProperty("description", description);
+        pack.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, description);
         JsonArray version = new JsonArray();
         version.add(101);
         version.add(1);

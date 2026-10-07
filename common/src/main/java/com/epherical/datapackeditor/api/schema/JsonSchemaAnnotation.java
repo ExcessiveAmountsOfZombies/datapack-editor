@@ -1,5 +1,6 @@
 package com.epherical.datapackeditor.api.schema;
 
+import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -19,24 +21,6 @@ import java.util.Set;
  * {@code display/title}. Annotations affect the generated schema only, they do not change codec decoding.
  */
 public class JsonSchemaAnnotation {
-
-    private static final String DEFINITIONS_PREFIX = "#/definitions/";
-
-
-    public static final String ALL_OF = "allOf";
-    public static final String $_REF = "$ref";
-    public static final String DEFINITIONS = "definitions";
-    public static final String ANY_OF = "anyOf";
-    public static final String ONE_OF = "oneOf";
-    public static final String ITEMS = "items";
-    public static final String PROPERTY_PATH = "propertyPath";
-    public static final String FORWARD_SLASH = "/";
-    public static final String TITLE = "title";
-    public static final String DESCRIPTION = "description";
-    public static final String MARKDOWN_DESCRIPTION = "markdownDescription";
-    public static final String DEFAULT = "default";
-    public static final String VALUE = "value";
-    public static final String PROPERTIES = "properties";
 
     private final JsonObject keywords;
 
@@ -62,7 +46,7 @@ public class JsonSchemaAnnotation {
      * @return the number of schema locations that were annotated
      */
     public int apply(JsonObject schema, String propertyPath) {
-        Objects.requireNonNull(schema, "schema");
+        Objects.requireNonNull(schema, DatapackEditorConstants.JSON_SCHEMA);
         List<String> path = parsePath(propertyPath);
         if (path.isEmpty()) {
             applyKeywords(schema);
@@ -77,8 +61,8 @@ public class JsonSchemaAnnotation {
             Set<JsonObject> next = identitySet();
             Set<JsonObject> annotated = identitySet();
             for (JsonObject container : current) {
-                if (!container.has(PROPERTIES) || !container.get(PROPERTIES).isJsonObject()) continue;
-                JsonObject properties = container.getAsJsonObject(PROPERTIES);
+                if (!container.has(DatapackEditorConstants.JSON_PROPERTIES) || !container.get(DatapackEditorConstants.JSON_PROPERTIES).isJsonObject()) continue;
+                JsonObject properties = container.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES);
                 JsonElement child = properties.get(property);
                 if (child == null) continue;
                 if (last) {
@@ -101,11 +85,11 @@ public class JsonSchemaAnnotation {
     }
 
     private static JsonObject annotatable(JsonElement schema) {
-        if (schema.isJsonObject() && !schema.getAsJsonObject().has($_REF)) return schema.getAsJsonObject();
+        if (schema.isJsonObject() && !schema.getAsJsonObject().has(DatapackEditorConstants.SCHEMA_REF)) return schema.getAsJsonObject();
         JsonObject wrapper = new JsonObject();
         JsonArray allOf = new JsonArray();
         allOf.add(schema.deepCopy());
-        wrapper.add(ALL_OF, allOf);
+        wrapper.add(DatapackEditorConstants.SCHEMA_ALL_OF, allOf);
         return wrapper;
     }
 
@@ -113,9 +97,14 @@ public class JsonSchemaAnnotation {
                                JsonElement element,
                                Set<JsonObject> output,
                                Set<JsonObject> visited) {
+        expand(root, element, output, visited, new HashSet<>());
+    }
+
+    private static void expand(JsonObject root, JsonElement element, Set<JsonObject> output,
+                               Set<JsonObject> visited, Set<String> resolving) {
         if (element == null || element.isJsonNull()) return;
         if (element.isJsonArray()) {
-            element.getAsJsonArray().forEach(child -> expand(root, child, output, visited));
+            element.getAsJsonArray().forEach(child -> expand(root, child, output, visited, resolving));
             return;
         }
         if (!element.isJsonObject()) return;
@@ -123,27 +112,38 @@ public class JsonSchemaAnnotation {
         if (!visited.add(object)) return;
         output.add(object);
 
-        if (object.has($_REF) && object.get($_REF).isJsonPrimitive()) {
-            String reference = object.get($_REF).getAsString();
-            if (reference.startsWith(DEFINITIONS_PREFIX)
-                    && root.has(DEFINITIONS) && root.get(DEFINITIONS).isJsonObject()) {
-                expand(root, root.getAsJsonObject(DEFINITIONS)
-                        .get(unescape(reference.substring(DEFINITIONS_PREFIX.length()))), output, visited);
+        if (object.has(DatapackEditorConstants.SCHEMA_REF) && object.get(DatapackEditorConstants.SCHEMA_REF).isJsonPrimitive()) {
+            String reference = object.get(DatapackEditorConstants.SCHEMA_REF).getAsString();
+            if (reference.startsWith(DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX)
+                    && root.has(DatapackEditorConstants.SCHEMA_DEFINITIONS) && root.get(DatapackEditorConstants.SCHEMA_DEFINITIONS).isJsonObject()) {
+                JsonObject definitions = root.getAsJsonObject(DatapackEditorConstants.SCHEMA_DEFINITIONS);
+                JsonElement body = definitions.get(unescape(reference.substring(DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX.length())));
+                if (body != null && resolving.add(reference)) {
+                    // Detach only the finite body on this path. Its children stay
+                    // references, and annotations cannot change other codec uses.
+                    String name = "annotation_" + definitions.size();
+                    while (definitions.has(name)) name += "_";
+                    JsonElement owned = body.deepCopy();
+                    definitions.add(name, owned);
+                    object.addProperty(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + name);
+                    expand(root, owned, output, visited, resolving);
+                    resolving.remove(reference);
+                }
             }
         }
-        for (String composition : List.of(ALL_OF, ANY_OF, ONE_OF)) {
-            if (object.has(composition)) expand(root, object.get(composition), output, visited);
+        for (String composition : List.of(DatapackEditorConstants.SCHEMA_ALL_OF, DatapackEditorConstants.SCHEMA_ANY_OF, DatapackEditorConstants.SCHEMA_ONE_OF)) {
+            if (object.has(composition)) expand(root, object.get(composition), output, visited, resolving);
         }
-        if (object.has(ITEMS)) expand(root, object.get(ITEMS), output, visited);
+        if (object.has(DatapackEditorConstants.SCHEMA_ITEMS)) expand(root, object.get(DatapackEditorConstants.SCHEMA_ITEMS), output, visited, resolving);
     }
 
     private static List<String> parsePath(String propertyPath) {
-        String path = Objects.requireNonNull(propertyPath, PROPERTY_PATH);
+        String path = Objects.requireNonNull(propertyPath, DatapackEditorConstants.SCHEMA_PROPERTY_PATH);
         if (path.isEmpty()) return List.of();
-        if (path.startsWith(FORWARD_SLASH)) path = path.substring(1);
-        if (path.endsWith(FORWARD_SLASH)) throw new IllegalArgumentException("Property path must not end with '/': " + propertyPath);
+        if (path.startsWith(DatapackEditorConstants.PATH_SEPARATOR)) path = path.substring(1);
+        if (path.endsWith(DatapackEditorConstants.PATH_SEPARATOR)) throw new IllegalArgumentException("Property path must not end with '/': " + propertyPath);
         List<String> result = new ArrayList<>();
-        for (String part : path.split(FORWARD_SLASH, -1)) {
+        for (String part : path.split(DatapackEditorConstants.PATH_SEPARATOR, -1)) {
             if (part.isEmpty()) throw new IllegalArgumentException("Property path contains an empty name: " + propertyPath);
             result.add(unescape(part));
         }
@@ -151,14 +151,13 @@ public class JsonSchemaAnnotation {
     }
 
     private static String unescape(String value) {
-        return value.replace("~1", FORWARD_SLASH).replace("~0", "~");
+        return value.replace(DatapackEditorConstants.SCHEMA_ESCAPED_SLASH, DatapackEditorConstants.PATH_SEPARATOR).replace(DatapackEditorConstants.SCHEMA_ESCAPED_TILDE, DatapackEditorConstants.SCHEMA_POINTER_TILDE);
     }
 
     private static Set<JsonObject> identitySet() {
         return Collections.newSetFromMap(new IdentityHashMap<>());
     }
 
-    /** Fluent builder for standard JSON Schema and Monaco annotation keywords. */
     public static class Builder {
         private final JsonObject keywords = new JsonObject();
         private final JsonArray examples = new JsonArray();
@@ -172,7 +171,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder title(String title) {
-            keywords.addProperty(TITLE, Objects.requireNonNull(title, TITLE));
+            keywords.addProperty(DatapackEditorConstants.JSON_TITLE, Objects.requireNonNull(title, DatapackEditorConstants.JSON_TITLE));
             return this;
         }
 
@@ -182,7 +181,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder description(String description) {
-            keywords.addProperty(DESCRIPTION, Objects.requireNonNull(description, DESCRIPTION));
+            keywords.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, Objects.requireNonNull(description, DatapackEditorConstants.JSON_DESCRIPTION));
             return this;
         }
 
@@ -192,7 +191,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder markdownDescription(String description) {
-            keywords.addProperty(MARKDOWN_DESCRIPTION, Objects.requireNonNull(description, DESCRIPTION));
+            keywords.addProperty("markdownDescription", Objects.requireNonNull(description, DatapackEditorConstants.JSON_DESCRIPTION));
             return this;
         }
 
@@ -202,7 +201,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder defaultValue(JsonElement value) {
-            keywords.add(DEFAULT, Objects.requireNonNull(value, VALUE).deepCopy());
+            keywords.add(DatapackEditorConstants.SCHEMA_DEFAULT, Objects.requireNonNull(value, DatapackEditorConstants.JSON_VALUE).deepCopy());
             return this;
         }
 
@@ -239,7 +238,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder example(JsonElement value) {
-            examples.add(Objects.requireNonNull(value, VALUE).deepCopy());
+            examples.add(Objects.requireNonNull(value, DatapackEditorConstants.JSON_VALUE).deepCopy());
             return this;
         }
 
@@ -276,7 +275,7 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder examples(Collection<? extends JsonElement> values) {
-            Objects.requireNonNull(values, "values").forEach(this::example);
+            Objects.requireNonNull(values, DatapackEditorConstants.JSON_VALUES).forEach(this::example);
             return this;
         }
 
@@ -297,7 +296,7 @@ public class JsonSchemaAnnotation {
          */
         public Builder enumDescriptions(Collection<String> descriptions) {
             JsonArray values = new JsonArray();
-            Objects.requireNonNull(descriptions, "descriptions").forEach(values::add);
+            Objects.requireNonNull(descriptions, DatapackEditorConstants.JSON_DESCRIPTIONS).forEach(values::add);
             keywords.add("enumDescriptions", values);
             return this;
         }
@@ -309,7 +308,7 @@ public class JsonSchemaAnnotation {
          */
         public Builder markdownEnumDescriptions(Collection<String> descriptions) {
             JsonArray values = new JsonArray();
-            Objects.requireNonNull(descriptions, "descriptions").forEach(values::add);
+            Objects.requireNonNull(descriptions, DatapackEditorConstants.JSON_DESCRIPTIONS).forEach(values::add);
             keywords.add("markdownEnumDescriptions", values);
             return this;
         }
@@ -321,8 +320,8 @@ public class JsonSchemaAnnotation {
          * @return this builder
          */
         public Builder keyword(String name, JsonElement value) {
-            keywords.add(Objects.requireNonNull(name, "name"),
-                    Objects.requireNonNull(value, VALUE).deepCopy());
+            keywords.add(Objects.requireNonNull(name, DatapackEditorConstants.JSON_NAME),
+                    Objects.requireNonNull(value, DatapackEditorConstants.JSON_VALUE).deepCopy());
             return this;
         }
 

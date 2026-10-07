@@ -75,43 +75,22 @@ function schemaKeysAtPosition(matches: MatchingSchema[], offset: number): Set<st
 export interface JsonSchemaRegistration {
   uri: string;
   fileMatch: string[];
-  schema: object;
+  schema?: object;
 }
 
-let recipeSchema: object | undefined;
-let tagSchemas: JsonSchemaRegistration[] = [];
-let dataPackSchemas: JsonSchemaRegistration[] = [];
+let schemaCatalog = "";
 
-function applyJsonSchemas() {
-  const schemas: JsonSchemaRegistration[] = [...tagSchemas, ...dataPackSchemas];
-  if (recipeSchema) {
-    schemas.push({
-      uri: "datapack-editor://schemas/recipes.json",
-      fileMatch: [
-        "file:///**/data/*/recipe/*.json",
-        "file:///**/data/*/recipe/**/*.json",
-        "file:///**/data/*/recipes/*.json",
-        "file:///**/data/*/recipes/**/*.json"
-      ],
-      schema: recipeSchema
-    });
-  }
-  jsonDefaults.setDiagnosticsOptions({validate: true, allowComments: false, schemas});
+export function configureSchemaCatalog(schemas: JsonSchemaRegistration[]) {
+  const catalog = schemas.map(({uri, fileMatch}) => {
+    const url = new URL(uri, location.href);
+    if (url.origin !== location.origin || url.pathname !== "/api/schema/family") {
+      throw new Error("Schema catalog must reference the local schema service");
+    }
+    return {uri: url.href, fileMatch};
+  });
+  const key = JSON.stringify(catalog);
+  if (key === schemaCatalog) return;
+  schemaCatalog = key;
+  jsonDefaults.setDiagnosticsOptions({validate: true, allowComments: false, enableSchemaRequest: true, schemas: catalog});
 }
-
-export function configureRecipeSchema(schema: object) {
-  recipeSchema = schema;
-  applyJsonSchemas();
-}
-
-export function configureTagSchemas(schemas: JsonSchemaRegistration[]) {
-  tagSchemas = schemas;
-  applyJsonSchemas();
-}
-
-export function configureDataPackSchemas(schemas: JsonSchemaRegistration[]) {
-  dataPackSchemas = schemas;
-  applyJsonSchemas();
-}
-
 export { monaco };

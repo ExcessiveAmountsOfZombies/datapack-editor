@@ -1,6 +1,6 @@
 package com.epherical.datapackeditor;
 
-import com.epherical.datapackeditor.api.schema.DataPackSchemaRegistration;
+import com.epherical.datapackeditor.api.DataPackRegistration;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema;
 import com.mojang.serialization.Codec;
 import com.google.gson.JsonElement;
@@ -56,7 +56,7 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
     }
 
     @Override
-    public List<DataPackSchemaRegistration> datapackSchemas() {
+    public List<DataPackRegistration> datapackResources() {
         return NeoForgeSchemas.dataMaps();
     }
 
