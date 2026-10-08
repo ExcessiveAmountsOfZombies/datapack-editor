@@ -1,5 +1,6 @@
 package com.epherical.datapackeditor;
 
+import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema.SchemaContext;
 import com.epherical.datapackeditor.api.DataPackRegistration;
@@ -25,6 +26,7 @@ import net.minecraft.world.level.storage.loot.entries.LootPoolEntries;
 import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.NeoForgeMod;
+import net.neoforged.neoforge.common.crafting.CompoundIngredient;
 import net.neoforged.neoforge.common.crafting.IngredientType;
 import net.neoforged.neoforge.common.loot.IGlobalLootModifier;
 import net.neoforged.neoforge.common.world.BiomeModifier;
@@ -50,9 +52,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static com.epherical.datapackeditor.DatapackEditorConstants.*;
-
-
 public class NeoForgeSchemas {
     public static List<DataPackRegistration> dataMaps() {
         return Stream.concat(Stream.of(DataPackRegistration.directory("data_maps").build()),
@@ -62,9 +61,9 @@ public class NeoForgeSchemas {
 
     private static <R, T> DataPackRegistration dataMapRegistration(DataMapType<R, T> type) {
         Identifier registry = type.registryKey().identifier();
-        String folder = (registry.getNamespace().equals("minecraft") ? "" : registry.getNamespace() + PATH_SEPARATOR) + registry.getPath();
+        String folder = (registry.getNamespace().equals("minecraft") ? "" : registry.getNamespace() + DatapackEditorConstants.PATH_SEPARATOR) + registry.getPath();
         Identifier file = Identifier.fromNamespaceAndPath(type.id().getNamespace(), "data_maps/"
-                + folder + PATH_SEPARATOR + type.id().getPath() + PATH_JSON_EXTENSION);
+                + folder + DatapackEditorConstants.PATH_SEPARATOR + type.id().getPath() + DatapackEditorConstants.PATH_JSON_EXTENSION);
         Codec<?> codec = DataMapFile.codec(type.registryKey(), type);
         return DataPackRegistration.file(file).schema(codec)
                 .title(type.id() + " data map for " + registry)
@@ -74,43 +73,43 @@ public class NeoForgeSchemas {
     private static JsonElement dataMapSchema(SchemaContext context, DataMapType<?, ?> type) {
         JsonElement value = context.schema(type.codec());
         JsonObject replaced = object();
-        replaced.getAsJsonObject(JSON_PROPERTIES).add(JSON_VALUE, value);
-        replaced.getAsJsonObject(JSON_PROPERTIES).add(JSON_REPLACE, context.schema(Codec.BOOL));
-        replaced.add(SCHEMA_REQUIRED, strings(JSON_VALUE));
+        replaced.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_VALUE, value);
+        replaced.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_REPLACE, context.schema(Codec.BOOL));
+        replaced.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_VALUE));
         JsonElement entry = alternatives(value, replaced);
         JsonObject conditional = object();
-        conditional.getAsJsonObject(JSON_PROPERTIES).add(MINECRAFT_NEOFORGE_VALUE, entry);
-        conditional.getAsJsonObject(JSON_PROPERTIES).add(MINECRAFT_NEOFORGE_CONDITIONS, context.schema(ICondition.LIST_CODEC));
-        conditional.add(SCHEMA_REQUIRED, strings(MINECRAFT_NEOFORGE_VALUE));
+        conditional.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.MINECRAFT_NEOFORGE_VALUE, entry);
+        conditional.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.MINECRAFT_NEOFORGE_CONDITIONS, context.schema(ICondition.LIST_CODEC));
+        conditional.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.MINECRAFT_NEOFORGE_VALUE));
         JsonObject values = object();
-        values.add(SCHEMA_PROPERTY_NAMES, context.registry(type.registryKey(), true));
-        values.add(SCHEMA_ADDITIONAL_PROPERTIES, alternatives(entry, withConditions(context, replaced), conditional));
+        values.add(DatapackEditorConstants.SCHEMA_PROPERTY_NAMES, context.registry(type.registryKey(), true));
+        values.add(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, alternatives(entry, withConditions(context, replaced), conditional));
         JsonObject schema = object();
-        JsonObject properties = schema.getAsJsonObject(JSON_PROPERTIES);
-        properties.add(JSON_REPLACE, context.schema(Codec.BOOL));
-        properties.add(JSON_VALUES, values);
+        JsonObject properties = schema.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES);
+        properties.add(DatapackEditorConstants.JSON_REPLACE, context.schema(Codec.BOOL));
+        properties.add(DatapackEditorConstants.JSON_VALUES, values);
         JsonElement key = context.registry(type.registryKey(), true);
         JsonElement removals = array(key);
         if (type instanceof AdvancedDataMapType<?, ?, ?> advanced) {
             JsonElement remover = context.schema(advanced.remover());
             JsonObject removal = object();
-            removal.getAsJsonObject(JSON_PROPERTIES).add(JSON_KEY, key);
-            removal.getAsJsonObject(JSON_PROPERTIES).add("remover", remover);
-            removal.add(SCHEMA_REQUIRED, strings(JSON_KEY));
+            removal.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_KEY, key);
+            removal.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add("remover", remover);
+            removal.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_KEY));
             JsonObject removalMap = object();
-            removalMap.add(SCHEMA_PROPERTY_NAMES, key);
-            removalMap.add(SCHEMA_ADDITIONAL_PROPERTIES, remover);
+            removalMap.add(DatapackEditorConstants.SCHEMA_PROPERTY_NAMES, key);
+            removalMap.add(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, remover);
             removals = alternatives(removals, array(removal), removalMap);
         }
         properties.add("remove", removals);
-        schema.add(SCHEMA_REQUIRED, strings(JSON_VALUES));
+        schema.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_VALUES));
         return withConditions(context, schema);
     }
 
     private static JsonObject object() {
         JsonObject schema = new JsonObject();
-        schema.addProperty(JSON_TYPE, SCHEMA_OBJECT);
-        schema.add(JSON_PROPERTIES, new JsonObject());
+        schema.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT);
+        schema.add(DatapackEditorConstants.JSON_PROPERTIES, new JsonObject());
         return schema;
     }
 
@@ -122,8 +121,8 @@ public class NeoForgeSchemas {
 
     private static JsonElement array(JsonElement items) {
         JsonObject schema = new JsonObject();
-        schema.addProperty(JSON_TYPE, SCHEMA_ARRAY);
-        schema.add(SCHEMA_ITEMS, items);
+        schema.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_ARRAY);
+        schema.add(DatapackEditorConstants.SCHEMA_ITEMS, items);
         return schema;
     }
 
@@ -131,7 +130,7 @@ public class NeoForgeSchemas {
         JsonArray alternatives = new JsonArray();
         for (JsonElement variant : variants) alternatives.add(variant);
         JsonObject schema = new JsonObject();
-        schema.add(SCHEMA_ANY_OF, alternatives);
+        schema.add(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
         return schema;
     }
 
@@ -141,34 +140,25 @@ public class NeoForgeSchemas {
             JsonArray alternatives = new JsonArray();
             alternatives.add(context.schema(Ingredient.NON_AIR_HOLDER_SET_CODEC));
             alternatives.add(dispatch(context, NeoForgeRegistries.INGREDIENT_TYPES,
-                    MINECRAFT_NEOFORGE_INGREDIENT_TYPE, IngredientType::codec));
+                    DatapackEditorConstants.MINECRAFT_NEOFORGE_INGREDIENT_TYPE, IngredientType::codec));
             JsonObject schema = new JsonObject();
-            schema.add(SCHEMA_ANY_OF, alternatives);
+            schema.add(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
             return schema;
         }));
         CodecJsonSchema.registerProvider(ICondition.CODEC, context -> context.definition("neoforge:condition",
-                () -> dispatch(context, NeoForgeRegistries.CONDITION_SERIALIZERS, JSON_TYPE, Function.identity())));
+                () -> dispatch(context, NeoForgeRegistries.CONDITION_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity())));
         CodecJsonSchema.registerProvider(FluidIngredient.CODEC, context -> context.definition("neoforge:fluid_ingredient", () ->
                 alternatives(context.schema(HolderSetCodec.create(Registries.FLUID, FluidInstance.FLUID_HOLDER_CODEC, false)),
-                        dispatch(context, NeoForgeRegistries.FLUID_INGREDIENT_TYPES, MINECRAFT_NEOFORGE_INGREDIENT_TYPE,
+                        dispatch(context, NeoForgeRegistries.FLUID_INGREDIENT_TYPES, DatapackEditorConstants.MINECRAFT_NEOFORGE_INGREDIENT_TYPE,
                                 type -> type == NeoForgeMod.SIMPLE_FLUID_INGREDIENT_TYPE.get() ? null : type.codec()))));
-        // aliasedFieldOf accepts either spelling, not both required fields.
-        CodecJsonSchema.registerProvider(CompoundFluidIngredient.CODEC, context -> {
-            JsonElement children = context.schema(FluidIngredient.CODEC.listOf(1, Integer.MAX_VALUE));
-            JsonObject current = object();
-            current.getAsJsonObject(JSON_PROPERTIES).add(JSON_CHILDREN, children);
-            current.add(SCHEMA_REQUIRED, strings(JSON_CHILDREN));
-            JsonObject legacy = object();
-            legacy.getAsJsonObject(JSON_PROPERTIES).add(JSON_INGREDIENTS, children);
-            legacy.add(SCHEMA_REQUIRED, strings(JSON_INGREDIENTS));
-            return alternatives(current, legacy);
-        });
+        CodecJsonSchema.registerProvider(CompoundIngredient.CODEC, context -> compoundIngredientSchema(context, Ingredient.CODEC));
+        CodecJsonSchema.registerProvider(CompoundFluidIngredient.CODEC, context -> compoundIngredientSchema(context, FluidIngredient.CODEC));
         CodecJsonSchema.registerProvider(IGlobalLootModifier.DIRECT_CODEC, context ->
-                dispatch(context, NeoForgeRegistries.GLOBAL_LOOT_MODIFIER_SERIALIZERS, JSON_TYPE, Function.identity()));
+                dispatch(context, NeoForgeRegistries.GLOBAL_LOOT_MODIFIER_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity()));
         CodecJsonSchema.registerProvider(BiomeModifier.DIRECT_CODEC, context ->
-                dispatch(context, NeoForgeRegistries.BIOME_MODIFIER_SERIALIZERS, JSON_TYPE, Function.identity()));
+                dispatch(context, NeoForgeRegistries.BIOME_MODIFIER_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity()));
         CodecJsonSchema.registerProvider(StructureModifier.DIRECT_CODEC, context ->
-                dispatch(context, NeoForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS, JSON_TYPE, Function.identity()));
+                dispatch(context, NeoForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity()));
         for (Codec<?> codec : new Codec<?>[]{Recipe.CODEC, Advancement.CODEC, LootTable.DIRECT_CODEC,
                 LootPool.CODEC, LootPoolEntries.CODEC, LootItemFunctions.ROOT_CODEC,
                 IGlobalLootModifier.DIRECT_CODEC, BiomeModifier.DIRECT_CODEC, StructureModifier.DIRECT_CODEC}) {
@@ -176,19 +166,31 @@ public class NeoForgeSchemas {
         }
         DataPackRegistration.directory("loot_modifiers").schema(IGlobalLootModifier.DIRECT_CODEC)
                 .title("NeoForge global loot modifier")
-                .description("Loaded automatically from loot_modifiers in NeoForge 26.1.2; higher priority runs first.")
+                .description("Loaded automatically from loot_modifiers in NeoForge 26.2; higher priority runs first.")
                 .register();
         DataPackRegistration.file(Identifier.parse("neoforge:recipe_priorities.json")).schema(Codec.PASSTHROUGH)
                 .title("NeoForge recipe priorities")
                 .provide(Codec.PASSTHROUGH, context -> {
                     JsonObject schema = object();
-                    schema.getAsJsonObject(JSON_PROPERTIES).add(JSON_REPLACE, context.schema(Codec.BOOL));
+                    schema.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_REPLACE, context.schema(Codec.BOOL));
                     JsonObject entries = object();
-                    entries.add(SCHEMA_ADDITIONAL_PROPERTIES, context.schema(Codec.INT));
-                    schema.getAsJsonObject(JSON_PROPERTIES).add(JSON_ENTRIES, entries);
-                    schema.add(SCHEMA_REQUIRED, strings(JSON_ENTRIES));
+                    entries.add(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, context.schema(Codec.INT));
+                    schema.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_ENTRIES, entries);
+                    schema.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_ENTRIES));
                     return schema;
                 }).register();
+    }
+
+    private static JsonElement compoundIngredientSchema(SchemaContext context, Codec<?> ingredient) {
+        // aliasedFieldOf accepts either spelling, not both required fields.
+        JsonElement children = context.schema(ingredient.listOf(1, Integer.MAX_VALUE));
+        JsonObject current = object();
+        current.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_CHILDREN, children);
+        current.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_CHILDREN));
+        JsonObject legacy = object();
+        legacy.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES).add(DatapackEditorConstants.JSON_INGREDIENTS, children);
+        legacy.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(DatapackEditorConstants.JSON_INGREDIENTS));
+        return alternatives(current, legacy);
     }
 
     private static <T> JsonElement dispatch(SchemaContext context, Registry<T> registry,
@@ -198,28 +200,28 @@ public class NeoForgeSchemas {
             MapCodec<?> variantCodec = codec.apply(entry.getValue());
             if (variantCodec == null) return;
             JsonObject variant = context.resolve(context.schema(variantCodec)).getAsJsonObject();
-            JsonObject properties = variant.has(JSON_PROPERTIES) ? variant.getAsJsonObject(JSON_PROPERTIES) : new JsonObject();
+            JsonObject properties = variant.has(DatapackEditorConstants.JSON_PROPERTIES) ? variant.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES) : new JsonObject();
             JsonObject type = new JsonObject();
-            type.addProperty(SCHEMA_CONST, entry.getKey().identifier().toString());
+            type.addProperty(DatapackEditorConstants.SCHEMA_CONST, entry.getKey().identifier().toString());
             properties.add(discriminator, type);
-            variant.add(JSON_PROPERTIES, properties);
-            variant.addProperty(JSON_TYPE, SCHEMA_OBJECT);
-            JsonArray required = variant.has(SCHEMA_REQUIRED) ? variant.getAsJsonArray(SCHEMA_REQUIRED) : new JsonArray();
+            variant.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
+            variant.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT);
+            JsonArray required = variant.has(DatapackEditorConstants.SCHEMA_REQUIRED) ? variant.getAsJsonArray(DatapackEditorConstants.SCHEMA_REQUIRED) : new JsonArray();
             required.add(discriminator);
-            variant.add(SCHEMA_REQUIRED, required);
+            variant.add(DatapackEditorConstants.SCHEMA_REQUIRED, required);
             variants.add(variant);
         });
         JsonObject schema = new JsonObject();
-        if (variants.isEmpty()) schema.addProperty(SCHEMA_NOT, true);
-        else schema.add(SCHEMA_ONE_OF, variants);
+        if (variants.isEmpty()) schema.addProperty(DatapackEditorConstants.SCHEMA_NOT, true);
+        else schema.add(DatapackEditorConstants.SCHEMA_ONE_OF, variants);
         return schema;
     }
 
     public static JsonElement withConditions(SchemaContext context, JsonElement inferred) {
         JsonObject schema = context.resolve(inferred).getAsJsonObject();
-        JsonObject properties = schema.has(JSON_PROPERTIES) ? schema.getAsJsonObject(JSON_PROPERTIES) : new JsonObject();
-        properties.add(MINECRAFT_NEOFORGE_CONDITIONS, context.schema(ICondition.LIST_CODEC));
-        schema.add(JSON_PROPERTIES, properties);
+        JsonObject properties = schema.has(DatapackEditorConstants.JSON_PROPERTIES) ? schema.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES) : new JsonObject();
+        properties.add(DatapackEditorConstants.MINECRAFT_NEOFORGE_CONDITIONS, context.schema(ICondition.LIST_CODEC));
+        schema.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
         return schema;
     }
 
@@ -229,9 +231,9 @@ public class NeoForgeSchemas {
         // Preserve the actual element/list and custom dispatch codecs, but describe
         // hashed tags explicitly: generic string-codec inference loses their '#'.
         Codec<?> custom = (Codec<?>) field(codec, "forgeDispatchCodec");
-        ResourceKey<? extends Registry<?>> registry = (ResourceKey<? extends Registry<?>>) field(codec, CODEC_REGISTRY_KEY);
+        ResourceKey<? extends Registry<?>> registry = (ResourceKey<? extends Registry<?>>) field(codec, DatapackEditorConstants.CODEC_REGISTRY_KEY);
         Codec<?> list = (Codec<?>) field(codec, "homogenousListCodec");
-        Codec<?> element = (Codec<?>) field(codec, CODEC_ELEMENT_CODEC);
+        Codec<?> element = (Codec<?>) field(codec, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
         HolderSetSchemaKey key = new HolderSetSchemaKey(registry, element, holderSetRequiresList(list));
         // HolderSetType.makeCodec creates new child holder-set instances. Share
         // their semantic family before dispatching into those recursive children.
@@ -243,7 +245,7 @@ public class NeoForgeSchemas {
         ArrayDeque<Object> wrappers = new ArrayDeque<>();
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         wrappers.add(list);
-        for (int visited = 0; !wrappers.isEmpty() && visited < CODEC_REFLECTION_MAX_DEPTH; visited++) {
+        for (int visited = 0; !wrappers.isEmpty() && visited < DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH; visited++) {
             Object current = wrappers.removeFirst();
             if (!seen.add(current)) continue;
             if (current instanceof ListCodec<?>) return true;
@@ -271,22 +273,22 @@ public class NeoForgeSchemas {
         }
 
         public int hashCode() {
-            return HASH_MULTIPLIER * (HASH_MULTIPLIER * registry.hashCode() + System.identityHashCode(element)) + Boolean.hashCode(requiresList);
+            return DatapackEditorConstants.HASH_MULTIPLIER * (DatapackEditorConstants.HASH_MULTIPLIER * registry.hashCode() + System.identityHashCode(element)) + Boolean.hashCode(requiresList);
         }
     }
 
     private static JsonElement holderSetTag(SchemaContext context, ResourceKey<? extends Registry<?>> registry) {
         JsonObject tag = new JsonObject();
-        tag.addProperty(JSON_TYPE, SCHEMA_STRING);
-        tag.addProperty(SCHEMA_PATTERN, "^#(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$");
+        tag.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_STRING);
+        tag.addProperty(DatapackEditorConstants.SCHEMA_PATTERN, "^#(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$");
         JsonObject values = context.resolve(context.registry(registry, true)).getAsJsonObject();
         JsonArray tags = new JsonArray();
-        if (values.has(SCHEMA_ENUM)) {
-            for (JsonElement value : values.getAsJsonArray(SCHEMA_ENUM)) {
-                if (value.getAsString().startsWith(MINECRAFT_TAG_PREFIX)) tags.add(value);
+        if (values.has(DatapackEditorConstants.SCHEMA_ENUM)) {
+            for (JsonElement value : values.getAsJsonArray(DatapackEditorConstants.SCHEMA_ENUM)) {
+                if (value.getAsString().startsWith(DatapackEditorConstants.MINECRAFT_TAG_PREFIX)) tags.add(value);
             }
         }
-        if (!tags.isEmpty()) tag.add(SCHEMA_ENUM, tags);
+        if (!tags.isEmpty()) tag.add(DatapackEditorConstants.SCHEMA_ENUM, tags);
         return tag;
     }
 

@@ -85,11 +85,11 @@ export function ExportDatapackDialog({unsavedPaths, onExport, onCancel}: {
                 <div class="grid grid-cols-2 gap-3">
                     <label class="block space-y-1 text-xs text-zinc-300">
                         <span>Minimum version</span>
-                        <input type="text" value="101.1" readOnly class={`${inputClass} text-zinc-400`}/>
+                        <input type="text" value="107.1" readOnly class={`${inputClass} text-zinc-400`}/>
                     </label>
                     <label class="block space-y-1 text-xs text-zinc-300">
                         <span>Maximum version</span>
-                        <input type="text" value="101.1" readOnly class={`${inputClass} text-zinc-400`}/>
+                        <input type="text" value="107.1" readOnly class={`${inputClass} text-zinc-400`}/>
                     </label>
                 </div>
                 <p class="text-[11px] leading-5 text-zinc-400">Exports saved workspace files to

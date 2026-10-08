@@ -4,6 +4,7 @@ import com.epherical.datapackeditor.CommonPlatform;
 import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.epherical.datapackeditor.api.DataPackRegistration;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema;
+import com.epherical.datapackeditor.impl.schemas.RecipeSchemaBuilder;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -85,6 +86,10 @@ public class DataPackRegistrationImpl {
     public static JsonObject buildResponse(RegistryAccess registries, String selected) {
         Map<String, JsonObject> registrations = new LinkedHashMap<>();
         if (selected == null || selected.equals(DatapackEditorConstants.JSON_ADVANCEMENT)) registrations.put(DatapackEditorConstants.JSON_ADVANCEMENT, advancementRegistration(registries));
+        if (selected == null || selected.equals(DatapackEditorConstants.JSON_RECIPE)) {
+            registrations.put(DatapackEditorConstants.JSON_RECIPE,
+                    registration(DatapackEditorConstants.JSON_RECIPE, RecipeSchemaBuilder.buildSchema(registries), false));
+        }
         datapackRegistries().stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
                 .forEach(data -> addRegistry(registrations, registries, data));
         RegistryDataLoader.DIMENSION_REGISTRIES.stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
@@ -108,6 +113,7 @@ public class DataPackRegistrationImpl {
     public static Map<String, JsonObject> catalog() {
         Map<String, JsonObject> result = new LinkedHashMap<>();
         result.put(DatapackEditorConstants.JSON_ADVANCEMENT, registration(DatapackEditorConstants.JSON_ADVANCEMENT, null, true));
+        result.put(DatapackEditorConstants.JSON_RECIPE, registration(DatapackEditorConstants.JSON_RECIPE, null, false));
         datapackRegistries().forEach(data -> result.put(Registries.elementsDirPath(data.key()),
                 registration(Registries.elementsDirPath(data.key()), null, false)));
         RegistryDataLoader.DIMENSION_REGISTRIES.forEach(data -> result.put(Registries.elementsDirPath(data.key()),
@@ -244,7 +250,7 @@ public class DataPackRegistrationImpl {
     }
 
     private static boolean isDefaultDirectory(String directory) {
-        if (directory.equals(DatapackEditorConstants.JSON_ADVANCEMENT)) return true;
+        if (directory.equals(DatapackEditorConstants.JSON_ADVANCEMENT) || directory.equals(DatapackEditorConstants.JSON_RECIPE)) return true;
         return datapackRegistries().stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
                 || RegistryDataLoader.DIMENSION_REGISTRIES.stream()

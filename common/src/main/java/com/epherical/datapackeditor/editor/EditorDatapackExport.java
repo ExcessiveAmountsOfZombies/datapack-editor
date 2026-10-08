@@ -93,7 +93,7 @@ public class EditorDatapackExport {
         JsonObject pack = new JsonObject();
         pack.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, description);
         JsonArray version = new JsonArray();
-        version.add(101);
+        version.add(107);
         version.add(1);
         pack.add("min_format", version);
         pack.add("max_format", version.deepCopy());
