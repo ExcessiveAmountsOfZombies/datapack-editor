@@ -14,8 +14,12 @@ import net.minecraft.server.packs.resources.Resource;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AdvancementCacher {
+
+    private static final Pattern ADVANCEMENT_PATH = Pattern.compile("(?:^|/)data/([^/]+)/advancements?/(.+)\\.json$");
 
     private final Map<String, Resource> resources;
     private final List<String> paths;
@@ -93,6 +97,8 @@ public class AdvancementCacher {
         long characters = 0;
         for (String path : paths) {
             MemoryChecker.checkpoint();
+            String advancementId = id(path);
+            if (advancementId == null) continue;
             try (InputStreamReader source = reader(resources.get(path))) {
                 JsonReader reader = new JsonReader(source);
                 String parent = null;
@@ -113,7 +119,7 @@ public class AdvancementCacher {
                     throw new IOException(DatapackEditorConstants.MESSAGE_TRAILING_JSON);
                 if (path.length() > DatapackEditorConstants.ADVANCEMENT_MAX_ID_CHARS || (parent != null && parent.length() > DatapackEditorConstants.ADVANCEMENT_MAX_ID_CHARS))
                     throw new IOException("Oversized advancement ID");
-                Node node = new Node(id(path), path, normalize(parent), display);
+                Node node = new Node(advancementId, path, normalize(parent), display);
                 characters += node.id.length() + path.length() + (parent == null ? 0 : parent.length());
                 if (characters > DatapackEditorConstants.ADVANCEMENT_METADATA_MAX_CHARS)
                     throw new CapacityException("Advancement lookup exceeds its metadata budget");
@@ -122,7 +128,7 @@ public class AdvancementCacher {
                 MemoryChecker.requireRunning();
                 // reject oversized files
                 if (characters > DatapackEditorConstants.ADVANCEMENT_METADATA_MAX_CHARS) throw exception;
-            } catch (IOException | IllegalStateException _) {
+            } catch (IOException | IllegalStateException unused1) {
             }
         }
         indexed = nodes;
@@ -337,13 +343,8 @@ public class AdvancementCacher {
     }
 
     private static String id(String path) {
-        int data = path.startsWith(DatapackEditorConstants.PATH_DATA_PREFIX) ? 0 : path.indexOf(DatapackEditorConstants.PATH_DATA_SEGMENT) + 1;
-        if (!path.endsWith(DatapackEditorConstants.PATH_JSON_EXTENSION)) return null;
-        String[] parts = path.substring(data).split(DatapackEditorConstants.PATH_SEPARATOR, DatapackEditorConstants.ADVANCEMENT_RESOURCE_PATH_PARTS);
-        return parts.length == DatapackEditorConstants.ADVANCEMENT_RESOURCE_PATH_PARTS && parts[0].equals(DatapackEditorConstants.PATH_DATA)
-                && (parts[2].equals(DatapackEditorConstants.JSON_ADVANCEMENT)
-                || parts[2].equals("advancements"))
-                ? parts[1] + ":" + parts[3].substring(0, parts[3].length() - DatapackEditorConstants.PATH_JSON_EXTENSION.length()) : null;
+        Matcher match = ADVANCEMENT_PATH.matcher(path);
+        return match.find() ? match.group(1) + ":" + match.group(2) : null;
     }
 
     private record Node(String id, String path, String parent, boolean display) {

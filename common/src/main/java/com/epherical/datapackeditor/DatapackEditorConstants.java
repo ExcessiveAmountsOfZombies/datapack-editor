@@ -2,7 +2,6 @@ package com.epherical.datapackeditor;
 
 public class DatapackEditorConstants {
 
-    public static final String MOD_ID = "datapack_editor";
 
     public static final int KIBIBYTE = 1_024;
     public static final int MEBIBYTE = KIBIBYTE * KIBIBYTE;
@@ -46,8 +45,8 @@ public class DatapackEditorConstants {
     public static final int UTF16_BYTES_PER_CHAR = 2;
     public static final long BYTES_64_MIB = 64L * MEBIBYTE;
     public static final int RECIPE_MAX_SLOTS = 64;
+    public static final int RECIPE_MAX_CANDIDATES = 128;
     public static final int HASH_MULTIPLIER = 31;
-    public static final int ADVANCEMENT_RESOURCE_PATH_PARTS = 4;
     public static final int DATAPACK_MAX_FILES = 250_000; // do i really need to do this? todo; make it configurable
 
     public static final String SCHEMA_ADDITIONAL_PROPERTIES = "additionalProperties";
@@ -78,9 +77,9 @@ public class DatapackEditorConstants {
 
     public static final String HTTP_CACHE_CONTROL = "Cache-Control";
     public static final String HTTP_JSON = "application/json";
+    public static final String HTTP_LOOPBACK_HOST = "127.0.0.1";
     public static final String HTTP_JSON_SCHEMA = "application/schema+json";
     public static final String HTTP_JSON_UTF8 = "application/json; charset=utf-8";
-    public static final String HTTP_LOOPBACK_HOST = "127.0.0.1";
     public static final String HTTP_NO_STORE = "no-store";
     public static final String HTTP_OCTET_STREAM = "application/octet-stream";
     public static final String HTTP_PRIVATE_CACHE = "private, max-age=300";
@@ -121,7 +120,6 @@ public class DatapackEditorConstants {
 
     public static final String EDITOR_COMPONENT_DEFINITION = "minecraft_component";
     public static final String EDITOR_LOADED_DATAPACKS = "Loaded Datapacks";
-    public static final String EDITOR_NAME = "datapack-editor";
 
     public static final String MINECRAFT_BLOCK_STATE_NAME = "Name";
     public static final String MINECRAFT_BLOCK_STATE_PROPERTIES = "Properties";
@@ -130,7 +128,6 @@ public class DatapackEditorConstants {
     public static final String JSON_ADAPTER = "adapter";
     public static final String JSON_ADVANCEMENT = "advancement";
     public static final String JSON_ANNOTATION = "annotation";
-    public static final String JSON_ATLAS = "atlas";
     public static final String JSON_BLOCK = "block";
     public static final String JSON_CODEC = "codec";
     public static final String JSON_COMPONENTS = "components";
@@ -165,7 +162,6 @@ public class DatapackEditorConstants {
     public static final String JSON_PARENT = "parent";
     public static final String JSON_PATH = "path";
     public static final String JSON_PLACED_FEATURE = "placed_feature";
-    public static final String JSON_PLAYER = "player";
     public static final String JSON_PREVIEW = "preview";
     public static final String JSON_PROPERTIES = "properties";
     public static final String JSON_PROVIDER = "provider";
@@ -197,7 +193,6 @@ public class DatapackEditorConstants {
     public static final String MESSAGE_ASSET_DIRECTORY_TOO_LARGE = "Asset directory exceeds its " + ASSET_MAX_DIRECTORY_NAMES + "-name budget";
     public static final String MESSAGE_ASSET_NOT_FOUND = "Asset not found";
     public static final String MESSAGE_COULD_NOT_READ_ASSET = "Could not read asset";
-    public static final String MESSAGE_INGREDIENT = "Ingredient";
     public static final String MESSAGE_INVALID_LOOT_TABLE_PREFIX = "Invalid loot table: ";
     public static final String MESSAGE_REGISTRY_DESCRIPTION = "Generated from Minecrafts registry data codec and datapack registries.";
     public static final String MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL = "Schema adapter returned null";
@@ -215,7 +210,6 @@ public class DatapackEditorConstants {
     public static final String SCHEMA_PATTERN = "pattern";
     public static final String CODEC_REGISTRY_KEY = "registryKey";
     public static final String MINECRAFT_NEOFORGE_CONDITIONS = "neoforge:conditions";
-    public static final String MINECRAFT_NEOFORGE_INGREDIENT_TYPE = "neoforge:ingredient_type";
     public static final String MINECRAFT_NEOFORGE_VALUE = "neoforge:value";
     public static final String JSON_CHILDREN = "children";
     public static final String JSON_ENTRIES = "entries";

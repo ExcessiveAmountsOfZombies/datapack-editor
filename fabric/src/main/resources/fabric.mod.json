@@ -30,6 +30,6 @@
     "fabric-api": "*",
     "minecraft": ">=${minecraft_version}",
     "java": ">=${java_version}",
-    "epherolib": ">=${epherolib_version}"
+    "epherolib": ">=${epherolib_version}-1.21.1"
   }
 }

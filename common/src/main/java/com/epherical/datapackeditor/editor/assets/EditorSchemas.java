@@ -13,7 +13,7 @@ import com.google.gson.JsonObject;
 import io.javalin.config.JavalinConfig;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 
@@ -48,7 +48,7 @@ public class EditorSchemas implements AutoCloseable {
 
     private synchronized Generation generation(String origin) {
         if (closed) throw new CancellationException("Editor schemas stopped");
-        Object stamp = server.reloadableRegistries().lookup();
+        Object stamp = server.reloadableRegistries().get();
         if (current == null || registryGeneration != stamp || !origin.equals(schemaOrigin)) {
             if (current != null) current.close();
             registryGeneration = stamp;
@@ -118,7 +118,7 @@ public class EditorSchemas implements AutoCloseable {
             boolean tags = Boolean.parseBoolean(context.queryParam(DatapackEditorConstants.JSON_TAGS));
             if (name == null) throw new IllegalArgumentException("Missing registry");
             String response = owner.request("registry:" + name + ":" + tags, () -> owner.registries.document(
-                    ResourceKey.createRegistryKey(Identifier.parse(name)), tags));
+                    ResourceKey.createRegistryKey(ResourceLocation.parse(name)), tags));
             context.contentType(DatapackEditorConstants.HTTP_JSON_SCHEMA).result(response);
         });
     }

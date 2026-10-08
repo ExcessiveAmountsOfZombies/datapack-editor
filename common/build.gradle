@@ -12,6 +12,10 @@ configurations {
 
 neoForge {
     neoFormVersion = neo_form_version
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
     // Automatically enable AccessTransformers if the file exists
     def at = file('src/main/resources/META-INF/accesstransformer.cfg')
     if (at.exists()) {
@@ -24,11 +28,11 @@ dependencies {
     // If this needs updating, check the versions bundled by both loaders:
     // https://github.com/neoforged/NeoForge/blob/26.1.x/gradle.properties#L37
     // https://github.com/FabricMC/fabric-loader/blob/master/gradle.properties#L12
-    compileOnly('net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7')
+    compileOnly('net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7')
     // Fabric and NeoForge both bundle MixinExtras, so it is safe to use it in common.
-    compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.5.3'))
+    compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.4.1'))
 
-    compileOnly("com.epherical.epherolib:epherolib-common-${epherolib_minecraft_version}:${epherolib_version}") {
+    compileOnly("com.epherical.epherolib:EpheroLib:${epherolib_version}-${epherolib_minecraft_version}") {
         transitive = false
     }
     shade("io.javalin:javalin:7.2.3") {
@@ -45,11 +49,15 @@ node {
     version = '24.13.0'
     nodeProjectDir = editorUiDirectory
     npmInstallCommand = 'ci'
+    fastNpmInstall = true
 }
 
 // Only the renderer's browser export is bundled; its native Node renderers need no install scripts.
 tasks.named('npmInstall') {
     args = ['--ignore-scripts']
+    inputs.property('nodeVersion', node.version)
+    inputs.property('npmVersion', node.npmVersion)
+    inputs.files(fileTree(editorUiDirectory) { include '.npmrc' }).withPropertyName('npmConfiguration')
 }
 
 def buildEditorUi = tasks.register('buildEditorUi', NpmTask) {

@@ -3,6 +3,7 @@ package com.epherical.datapackeditor.editor.feature;
 import com.epherical.datapackeditor.DatapackEditorConstants;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.particles.ParticleOptions;
@@ -13,7 +14,6 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.attribute.EnvironmentAttributeReader;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
@@ -59,7 +59,6 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
     private final FeatureFlagSet features;
     private final Holder<Biome> biome;
     private final BiomeManager biomeManager;
-    private final PalettedContainerFactory containers;
     private final RandomSource random;
     private final long seed;
     private final BlockState terrainState;
@@ -76,9 +75,8 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
         this.registries = source.registryAccess();
         this.dimension = source.dimensionType();
         this.features = source.enabledFeatures();
-        this.biome = registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
+        this.biome = registries.registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.PLAINS);
         this.biomeManager = new BiomeManager(this, seed);
-        this.containers = PalettedContainerFactory.create(registries);
         this.random = RandomSource.create(seed);
         this.seed = seed;
         this.terrainState = terrainState;
@@ -230,11 +228,6 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
     }
 
     @Override
-    public EnvironmentAttributeReader environmentAttributes() {
-        return EnvironmentAttributeReader.EMPTY;
-    }
-
-    @Override
     public long getSeed() {
         return seed;
     }
@@ -260,8 +253,13 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
     }
 
     @Override
+    public float getShade(Direction direction, boolean shade) {
+        return 1.0F;
+    }
+
+    @Override
     public int getBrightness(LightLayer layer, BlockPos pos) {
-        return layer == LightLayer.SKY && pos.getY() >= getHeight(Heightmap.Types.WORLD_SURFACE, pos) ? 15 : 0;
+        return layer == LightLayer.SKY && pos.getY() >= getHeight(Heightmap.Types.WORLD_SURFACE, pos.getX(), pos.getZ()) ? 15 : 0;
     }
 
     @Override
@@ -289,7 +287,6 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
         return subTick++;
     }
 
-    @Override
     public long getGameTime() {
         return 0;
     }
@@ -310,7 +307,7 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
     }
 
     @Override
-    public void playSound(Entity except, BlockPos pos, SoundEvent sound, SoundSource source, float volume, float pitch) {
+    public void playSound(Player except, BlockPos pos, SoundEvent sound, SoundSource source, float volume, float pitch) {
     }
 
     @Override
@@ -318,7 +315,7 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
     }
 
     @Override
-    public void levelEvent(Entity source, int type, BlockPos pos, int data) {
+    public void levelEvent(Player source, int type, BlockPos pos, int data) {
     }
 
     @Override
@@ -373,7 +370,7 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
         private final Map<Integer, PreviewSection> previewSections = new HashMap<>();
 
         public PreviewChunk(ChunkPos pos, EditorFeatureLevel preview) {
-            super(pos, UpgradeData.EMPTY, preview, preview.containers, null);
+            super(pos, UpgradeData.EMPTY, preview, preview.registries.registryOrThrow(Registries.BIOME), null);
             this.preview = preview;
         }
 
@@ -394,9 +391,9 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
         }
 
         @Override
-        public BlockState setBlockState(BlockPos pos, BlockState state, int flags) {
+        public BlockState setBlockState(BlockPos pos, BlockState state, boolean moved) {
             BlockState old = preview.getBlockState(pos);
-            preview.setBlock(pos, state, flags);
+            preview.setBlock(pos, state, Block.UPDATE_CLIENTS);
             return old;
         }
 
@@ -416,7 +413,7 @@ public class EditorFeatureLevel implements WorldGenLevel, AutoCloseable {
         private final BlockPos origin;
 
         public PreviewSection(EditorFeatureLevel preview, BlockPos origin) {
-            super(preview.containers);
+            super(preview.registries.registryOrThrow(Registries.BIOME));
             this.preview = preview;
             this.origin = origin;
         }

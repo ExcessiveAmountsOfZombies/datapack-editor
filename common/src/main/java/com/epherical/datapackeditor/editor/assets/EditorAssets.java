@@ -9,13 +9,13 @@ import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import net.minecraft.SharedConstants;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.server.packs.resources.ResourceManager;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.io.BufferedOutputStream;
@@ -50,7 +50,7 @@ public class EditorAssets {
 
     public EditorAssets(MinecraftServer server) {
         this(server.getResourceManager(), server.getServerDirectory().resolve("mods"),
-                SharedConstants.getCurrentVersion().name());
+                SharedConstants.getCurrentVersion().getName());
     }
 
     public EditorAssets(ResourceManager resourceManager, Path modsDirectory, String version) {
@@ -457,7 +457,7 @@ public class EditorAssets {
                 IoSupplier<InputStream> supplier;
                 if (DatapackEditorConstants.PATH_PACK_METADATA.equals(path)) supplier = pack.getRootResource(path);
                 else {
-                    Identifier identifier = identifier(path);
+                    ResourceLocation identifier = identifier(path);
                     if (identifier == null) return null;
                     supplier = pack.getResource(PackType.CLIENT_RESOURCES, identifier);
                 }
@@ -544,10 +544,10 @@ public class EditorAssets {
             return names;
         }
 
-        private @Nullable Identifier identifier(String path) {
+        private @Nullable ResourceLocation identifier(String path) {
             String rest = path.substring(DatapackEditorConstants.PATH_ASSETS_PREFIX.length());
             int separator = rest.indexOf(DatapackEditorConstants.PATH_SEPARATOR_CHAR);
-            return separator < 0 ? null : Identifier.tryParse(rest.substring(0, separator) + ":" + rest.substring(separator + 1));
+            return separator < 0 ? null : ResourceLocation.tryParse(rest.substring(0, separator) + ":" + rest.substring(separator + 1));
         }
     }
 }

@@ -9,7 +9,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 
 import java.util.ArrayList;
@@ -26,12 +26,12 @@ import java.util.stream.Stream;
  *
  * <pre>{@code
  * DataPackRegistration.directory("example/widget").schema(Widget.CODEC).register();
- * DataPackRegistration.file(Identifier.parse("example:settings.json")).register();
+ * DataPackRegistration.file(ResourceLocation.parse("example:settings.json")).register();
  * }</pre>
  */
 public class DataPackRegistration {
     private final String directory;
-    private final Identifier file;
+    private final ResourceLocation file;
     private final Codec<?> codec;
     private final boolean hasSchema;
     private final String title;
@@ -56,7 +56,7 @@ public class DataPackRegistration {
     }
 
     /** Starts discovery of one named file across all contributing resource packs. */
-    public static Builder file(Identifier file) {
+    public static Builder file(ResourceLocation file) {
         return new Builder(file);
     }
 
@@ -81,7 +81,7 @@ public class DataPackRegistration {
     }
 
     /** Named JSON file, or null for a directory. */
-    public Identifier file() {
+    public ResourceLocation file() {
         return file;
     }
 
@@ -128,7 +128,7 @@ public class DataPackRegistration {
 
     public static class Builder {
         private final String directory;
-        private final Identifier file;
+        private final ResourceLocation file;
         private Codec<?> codec;
         private boolean hasSchema;
         private String title;
@@ -141,7 +141,7 @@ public class DataPackRegistration {
             file = null;
         }
 
-        public Builder(Identifier file) {
+        public Builder(ResourceLocation file) {
             this.file = Objects.requireNonNull(file, "file");
             directory = null;
             validatePath(file.getPath());

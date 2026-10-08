@@ -2,7 +2,6 @@ package com.epherical.datapackeditor.editor;
 
 import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.epherical.datapackeditor.editor.EditorWorkspace.WorkspaceException;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.io.IOException;
@@ -92,11 +91,7 @@ public class EditorDatapackExport {
     private static String metadata(String description) {
         JsonObject pack = new JsonObject();
         pack.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, description);
-        JsonArray version = new JsonArray();
-        version.add(101);
-        version.add(1);
-        pack.add("min_format", version);
-        pack.add("max_format", version.deepCopy());
+        pack.addProperty("pack_format", 48);
         JsonObject metadata = new JsonObject();
         metadata.add("pack", pack);
         return metadata + "\n";

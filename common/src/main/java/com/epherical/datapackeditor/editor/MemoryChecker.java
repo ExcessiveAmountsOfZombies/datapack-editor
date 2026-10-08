@@ -129,7 +129,7 @@ public class MemoryChecker {
             if (error instanceof SelectionException selection) result.add(DatapackEditorConstants.JSON_ROOTS, selection.roots());
             context.status(413).contentType(DatapackEditorConstants.HTTP_JSON).result(result.toString());
         });
-        config.routes.before(DatapackEditorConstants.ROUTE_API, _ -> check());
+        config.routes.before(DatapackEditorConstants.ROUTE_API, unused1 -> check());
         // Hold admission until the response stream finishes, including client disconnects.
         config.jetty.modifyServletContextHandler(handler -> handler.addFilter(new FilterHolder((request, response, chain) -> {
             HttpServletRequest httpRequest = (HttpServletRequest) request;

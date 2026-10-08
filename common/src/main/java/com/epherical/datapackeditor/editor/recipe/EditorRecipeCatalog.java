@@ -31,10 +31,10 @@ public class EditorRecipeCatalog {
                         .sorted()
                         .toList())));
         config.routes.get("/api/recipe-tags", context -> {
-            Registry<Item> items = server.registryAccess().lookupOrThrow(Registries.ITEM);
+            Registry<Item> items = server.registryAccess().registryOrThrow(Registries.ITEM);
             Map<String, List<String>> tags = new TreeMap<>();
-            items.getTags().forEach(tag -> tags.put(tag.key().location().toString(),
-                    tag.stream().map(holder -> items.getKey(holder.value()).toString()).sorted().toList()));
+            items.getTags().forEach(tag -> tags.put(tag.getFirst().location().toString(),
+                    tag.getSecond().stream().map(holder -> items.getKey(holder.value()).toString()).sorted().toList()));
             context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE)
                     .contentType(DatapackEditorConstants.HTTP_JSON)
                     .result(GSON.toJson(tags));

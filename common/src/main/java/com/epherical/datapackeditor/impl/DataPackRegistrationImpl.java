@@ -14,12 +14,11 @@ import net.minecraft.advancements.Advancement;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.storage.loot.LootDataType;
-import net.minecraft.world.level.storage.loot.Validatable;
+import net.minecraft.world.item.crafting.Recipe;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -68,7 +67,7 @@ public class DataPackRegistrationImpl {
                 .distinct().sorted().toList();
     }
 
-    public static List<Identifier> registeredFiles() {
+    public static List<ResourceLocation> registeredFiles() {
         return resources().stream().map(DataPackRegistration::file).filter(Objects::nonNull)
                 .distinct().toList();
     }
@@ -85,6 +84,10 @@ public class DataPackRegistrationImpl {
     public static JsonObject buildResponse(RegistryAccess registries, String selected) {
         Map<String, JsonObject> registrations = new LinkedHashMap<>();
         if (selected == null || selected.equals(DatapackEditorConstants.JSON_ADVANCEMENT)) registrations.put(DatapackEditorConstants.JSON_ADVANCEMENT, advancementRegistration(registries));
+        if (selected == null || selected.equals(DatapackEditorConstants.JSON_RECIPE)) {
+            JsonObject recipe = schema(registries, Recipe.CODEC, Registries.RECIPE);
+            registrations.put(DatapackEditorConstants.JSON_RECIPE, registration(DatapackEditorConstants.JSON_RECIPE, recipe, false));
+        }
         datapackRegistries().stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
                 .forEach(data -> addRegistry(registrations, registries, data));
         RegistryDataLoader.DIMENSION_REGISTRIES.stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
@@ -108,6 +111,7 @@ public class DataPackRegistrationImpl {
     public static Map<String, JsonObject> catalog() {
         Map<String, JsonObject> result = new LinkedHashMap<>();
         result.put(DatapackEditorConstants.JSON_ADVANCEMENT, registration(DatapackEditorConstants.JSON_ADVANCEMENT, null, true));
+        result.put(DatapackEditorConstants.JSON_RECIPE, registration(DatapackEditorConstants.JSON_RECIPE, null, false));
         datapackRegistries().forEach(data -> result.put(Registries.elementsDirPath(data.key()),
                 registration(Registries.elementsDirPath(data.key()), null, false)));
         RegistryDataLoader.DIMENSION_REGISTRIES.forEach(data -> result.put(Registries.elementsDirPath(data.key()),
@@ -143,7 +147,7 @@ public class DataPackRegistrationImpl {
         registrations.put(directory, registration(directory, schema, false));
     }
 
-    private static <T extends Validatable> void addLootRegistry(
+    private static <T> void addLootRegistry(
             Map<String, JsonObject> registrations,
             RegistryAccess registries,
             LootDataType<T> data) {
@@ -158,25 +162,10 @@ public class DataPackRegistrationImpl {
                                      ResourceKey<? extends Registry<?>> key) {
         CodecJsonSchema.Builder builder = CodecJsonSchemaImpl.builder(registries);
         if (CommonPlatform.platform != null) CommonPlatform.platform.configureDatapackSchema(builder, codec);
-        if (key.equals(Registries.TRIAL_SPAWNER_CONFIG)) {
-            builder.register(CompoundTag.CODEC, trialSpawnerEntityTagSchema(registries));
-        }
         JsonObject schema = CodecJsonSchemaImpl.create(builder, codec);
-        schema.addProperty(DatapackEditorConstants.JSON_TITLE, key.identifier() + " datapack entry");
+        schema.addProperty(DatapackEditorConstants.JSON_TITLE, key.location() + " datapack entry");
         schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, DatapackEditorConstants.MESSAGE_REGISTRY_DESCRIPTION);
         return schema;
-    }
-
-    private static JsonObject trialSpawnerEntityTagSchema(RegistryAccess registries) {
-        JsonElement entityId = CodecJsonSchemaImpl.registrySchema(registries, Registries.ENTITY_TYPE, false);
-
-        JsonObject properties = new JsonObject();
-        properties.add(DatapackEditorConstants.JSON_ID, entityId);
-        JsonObject entityTag = new JsonObject();
-        entityTag.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT);
-        entityTag.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-        entityTag.addProperty(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, true);
-        return entityTag;
     }
 
     private static void applyRegisteredSchema(Map<String, JsonObject> registrations,
@@ -244,7 +233,7 @@ public class DataPackRegistrationImpl {
     }
 
     private static boolean isDefaultDirectory(String directory) {
-        if (directory.equals(DatapackEditorConstants.JSON_ADVANCEMENT)) return true;
+        if (directory.equals(DatapackEditorConstants.JSON_ADVANCEMENT) || directory.equals(DatapackEditorConstants.JSON_RECIPE)) return true;
         return datapackRegistries().stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
                 || RegistryDataLoader.DIMENSION_REGISTRIES.stream()

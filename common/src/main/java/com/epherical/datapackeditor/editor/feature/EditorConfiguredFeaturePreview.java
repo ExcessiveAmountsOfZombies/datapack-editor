@@ -10,7 +10,7 @@ import io.javalin.http.HttpStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -152,7 +152,7 @@ public class EditorConfiguredFeaturePreview {
     }
 
     private JsonElement resolveReference(String value, String kind, JsonObject overrides, Set<String> chain, int depth, int[] count) {
-        Identifier id = Identifier.tryParse(value);
+        ResourceLocation id = ResourceLocation.tryParse(value);
         if (id == null) return new JsonPrimitive(value);
         String key = kind + DatapackEditorConstants.PATH_SEPARATOR + id;
         if (!chain.add(key)) throw new IllegalArgumentException("Circular feature reference: " + key);
@@ -180,7 +180,7 @@ public class EditorConfiguredFeaturePreview {
         }
     }
 
-    private JsonElement savedReference(Identifier id, String kind) {
+    private JsonElement savedReference(ResourceLocation id, String kind) {
         Path root = Path.of(DatapackEditorConstants.PATH_WORKSPACE).toAbsolutePath().normalize();
         Path candidate = root.resolve(DatapackEditorConstants.PATH_DATA).resolve(id.getNamespace()).resolve("worldgen").resolve(kind).resolve(id.getPath() + DatapackEditorConstants.PATH_JSON_EXTENSION).normalize();
         if (!candidate.startsWith(root) || !Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) return null;

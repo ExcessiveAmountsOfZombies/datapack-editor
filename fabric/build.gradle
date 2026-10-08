@@ -1,17 +1,24 @@
 plugins {
     id 'multiloader-loader'
-    id 'net.fabricmc.fabric-loom'
+    id 'fabric-loom'
 }
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
-    implementation("com.epherical.epherolib:epherolib-fabric-${epherolib_minecraft_version}:${epherolib_version}") {
+    mappings loom.layered {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-${parchment_minecraft}:${parchment_version}@zip")
+    }
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    modImplementation("com.epherical.epherolib:EpheroLib-fabric:${epherolib_version}-${epherolib_minecraft_version}") {
         transitive = false
     }
 }
 
 loom {
+    mixin {
+        defaultRefmapName.set("${mod_id}.refmap.json")
+    }
     def aw = project(':common').file("src/main/resources/${mod_id}.accesswidener")
     if (aw.exists()) {
         accessWidenerPath.set(aw)
@@ -33,6 +40,12 @@ loom {
 }
 
 tasks.named('shadowJar') {
+    archiveClassifier = 'dev-shadow'
+}
+
+tasks.named('remapJar') {
+    dependsOn tasks.named('shadowJar')
+    inputFile.set(tasks.named('shadowJar').flatMap { it.archiveFile })
     archiveClassifier = ''
 }
 

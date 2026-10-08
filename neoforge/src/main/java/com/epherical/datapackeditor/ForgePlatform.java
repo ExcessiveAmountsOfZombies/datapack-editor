@@ -6,11 +6,12 @@ import com.mojang.serialization.Codec;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import net.minecraft.core.Holder;
-import net.minecraft.resources.Identifier;
+import net.minecraft.core.Registry;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.neoforged.neoforge.common.conditions.ConditionalOps;
 import net.neoforged.neoforge.common.conditions.ICondition;
@@ -21,7 +22,10 @@ import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ForgePlatform extends CommonPlatform<ForgePlatform> {
 
@@ -32,12 +36,12 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
 
     @Override
     public boolean isClientEnvironment() {
-        return FMLEnvironment.getDist() == Dist.CLIENT;
+        return FMLEnvironment.dist == Dist.CLIENT;
     }
 
     @Override
     public boolean isServerEnvironment() {
-        return FMLEnvironment.getDist() == Dist.DEDICATED_SERVER;
+        return FMLEnvironment.dist == Dist.DEDICATED_SERVER;
     }
 
     @Override
@@ -67,23 +71,20 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
 
     @Override
     public RegistryOps<JsonElement> previewOps(MinecraftServer server) {
-        var registries = server.reloadableRegistries().lookup();
+        var registries = server.reloadableRegistries().get();
         return new ConditionalOps<>(super.previewOps(server), new ICondition.IContext() {
             @Override
-            public <T> boolean isTagLoaded(TagKey<T> key) {
-                return registries.lookup(key.registry()).flatMap(lookup -> lookup.get(key)).isPresent();
-            }
-
-            @Override
-            public <T> Collection<Holder<T>> getTag(TagKey<T> key) {
-                return registries.lookup(key.registry()).flatMap(lookup -> lookup.get(key))
-                        .map(tag -> tag.stream().toList()).orElse(List.of());
+            public <T> Map<ResourceLocation, Collection<Holder<T>>> getAllTags(ResourceKey<? extends Registry<T>> registry) {
+                Map<ResourceLocation, Collection<Holder<T>>> tags = new LinkedHashMap<>();
+                registries.lookup(registry).ifPresent(lookup -> lookup.listTags()
+                        .forEach(tag -> tags.put(tag.key().location(), tag.stream().toList())));
+                return Collections.unmodifiableMap(tags);
             }
         });
     }
 
     @Override
-    public LootTable previewLootTable(MinecraftServer server, Identifier id, JsonElement definition) {
+    public LootTable previewLootTable(MinecraftServer server, ResourceLocation id, JsonElement definition) {
         LootTable table = ConditionalOps.createConditionalCodec(LootTable.DIRECT_CODEC)
                 .parse(previewOps(server), definition).getOrThrow(JsonParseException::new)
                 .orElseThrow(() -> new IllegalArgumentException("This loot table's NeoForge conditions do not match the running server"));

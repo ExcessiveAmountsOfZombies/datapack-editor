@@ -4,13 +4,17 @@ plugins {
 }
 
 dependencies {
-    implementation("com.epherical.epherolib:epherolib-neoforge-${epherolib_minecraft_version}:${epherolib_version}") {
+    implementation("com.epherical.epherolib:EpheroLib-neoforge:${epherolib_version}-${epherolib_minecraft_version}") {
         transitive = false
     }
 }
 
 neoForge {
     version = neoforge_version
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
     // Automatically enable neoforge AccessTransformers if the file exists
     def at = project(':common').file('src/main/resources/META-INF/accesstransformer.cfg')
     if (at.exists()) {
@@ -23,10 +27,10 @@ neoForge {
         }
         client {
             client()
-            gameDirectory = this.mkdir(this.file("runs/client"))
+            gameDirectory = this.mkdir(this.file("runs/client_"))
         }
         data {
-            clientData()
+            data()
             gameDirectory = this.mkdir(this.file("runs/data"))
             // DataGen can be run by - "./gradlew :neoforge:runData" in Terminal.
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
@@ -34,7 +38,7 @@ neoForge {
         }
         server {
             server()
-            this.file("runs/server").createParentDirectories()
+            this.file("runs/server").parentFile.mkdirs()
             gameDirectory = this.mkdir(this.file("runs/server"))
         }
     }
@@ -43,6 +47,10 @@ neoForge {
             sourceSet sourceSets.main
         }
     }
+}
+
+configurations.named('additionalRuntimeClasspath') {
+    extendsFrom(configurations.shadeRuntime)
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }

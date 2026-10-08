@@ -5,13 +5,16 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 
 public class EditorCommands {
+    private static final Logger log = LoggerFactory.getLogger(EditorCommands.class);
+
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("dpackEditor")
-                .requires(Commands.hasPermission(Commands.LEVEL_ADMINS))
+                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("start").executes(context -> start(context.getSource())))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())))
                 .then(Commands.literal("status").executes(context -> status(context.getSource()))));
@@ -23,7 +26,7 @@ public class EditorCommands {
             Component link = Component.literal(result.url())
                     .withStyle(style -> style
                             .withUnderlined(true)
-                            .withClickEvent(new ClickEvent.OpenUrl(URI.create(result.url()))));
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, result.url())));
             Component message = Component.literal(result.started()
                             ? "datapack-editor started: "
                             : "datapack-editor is already running: ")
@@ -32,6 +35,7 @@ public class EditorCommands {
             return 1;
         } catch (RuntimeException | LinkageError exception) {
             source.sendFailure(Component.literal("Could not start the datapack-editor: " + exception.getMessage()));
+            log.error("What Went Wrong:", exception);
             return 0;
         }
     }
@@ -62,7 +66,7 @@ public class EditorCommands {
         Component link = Component.literal(url)
                 .withStyle(style -> style
                         .withUnderlined(true)
-                        .withClickEvent(new ClickEvent.OpenUrl(URI.create(url))));
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url)));
         source.sendSuccess(() -> Component.literal("datapack-editor is running: ").append(link), false);
         return 1;
     }

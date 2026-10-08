@@ -15,8 +15,9 @@ import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.Resource;
@@ -64,7 +65,7 @@ public class EditorDatapacks {
             MemoryChecker.checkpoint();
             scanDirectory(resourceManager, directory, root, files, filesByPack);
         }
-        for (Identifier file : DataPackRegistrationImpl.registeredFiles()) {
+        for (ResourceLocation file : DataPackRegistrationImpl.registeredFiles()) {
             exposeResources(file, resourceManager.getResourceStack(file), root, files, filesByPack);
         }
         for (Map.Entry<String, Integer> entry : filesByPack.entrySet()) {
@@ -76,7 +77,7 @@ public class EditorDatapacks {
     }
 
     private static Set<String> collectDataDirectories(MinecraftServer server) {
-        return collectDataDirectories(server.registryAccess().listRegistryKeys());
+        return collectDataDirectories(server.registryAccess().registries().map(RegistryAccess.RegistryEntry::key));
     }
 
     public static Set<String> collectDataDirectories(
@@ -111,9 +112,9 @@ public class EditorDatapacks {
                                       TreeNode root, Map<String, Resource> files,
                                       Map<String, Integer> filesByPack) {
         try {
-            Map<Identifier, List<Resource>> stacks = resourceManager.listResourceStacks(
+            Map<ResourceLocation, List<Resource>> stacks = resourceManager.listResourceStacks(
                     directory, identifier -> identifier.getPath().endsWith(DatapackEditorConstants.PATH_JSON_EXTENSION));
-            for (Map.Entry<Identifier, List<Resource>> entry : stacks.entrySet()) {
+            for (Map.Entry<ResourceLocation, List<Resource>> entry : stacks.entrySet()) {
                 exposeResources(entry.getKey(), entry.getValue(), root, files, filesByPack);
             }
         } catch (CapacityException exception) {
@@ -123,7 +124,7 @@ public class EditorDatapacks {
         }
     }
 
-    private static void exposeResources(Identifier identifier, List<Resource> resources, TreeNode root,
+    private static void exposeResources(ResourceLocation identifier, List<Resource> resources, TreeNode root,
                                         Map<String, Resource> files, Map<String, Integer> filesByPack) {
         for (Resource resource : resources) {
             MemoryChecker.requireRunning();
@@ -290,7 +291,7 @@ public class EditorDatapacks {
         writer.endArray();
     }
 
-    private static void addFile(TreeNode root, String packId, Identifier identifier, String virtualPath) {
+    private static void addFile(TreeNode root, String packId, ResourceLocation identifier, String virtualPath) {
         TreeNode pack = root.child(packId, packId, false);
         StringBuilder path = new StringBuilder(packId).append(DatapackEditorConstants.PATH_SEPARATOR).append(DatapackEditorConstants.PATH_DATA);
         TreeNode data = pack.child(DatapackEditorConstants.PATH_DATA, path.toString(), false);

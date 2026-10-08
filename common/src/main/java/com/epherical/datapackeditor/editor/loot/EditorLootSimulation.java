@@ -9,13 +9,12 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
-import com.mojang.serialization.JsonOps;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
@@ -58,10 +57,10 @@ public class EditorLootSimulation {
 
     private void simulateChest(Context context) {
         JsonObject definition;
-        Identifier tableId;
+        ResourceLocation tableId;
         try {
             String id = context.queryParam(DatapackEditorConstants.JSON_ID);
-            tableId = id == null ? Identifier.fromNamespaceAndPath(DatapackEditorConstants.EDITOR_NAME, DatapackEditorConstants.JSON_PREVIEW) : Identifier.tryParse(id);
+            tableId = id == null ? ResourceLocation.fromNamespaceAndPath("datapack-editor", DatapackEditorConstants.JSON_PREVIEW) : ResourceLocation.tryParse(id);
             if (tableId == null) throw new IllegalArgumentException("Invalid loot table ID");
             definition = JsonParser.parseString(context.body()).getAsJsonObject();
             JsonElement typeValue = definition.get(DatapackEditorConstants.JSON_TYPE);
@@ -103,9 +102,8 @@ public class EditorLootSimulation {
         }
     }
 
-    private JsonObject roll(JsonObject definition, Identifier tableId) {
-        var registries = server.reloadableRegistries().lookup();
-        var ops = registries.createSerializationContext(JsonOps.INSTANCE);
+    private JsonObject roll(JsonObject definition, ResourceLocation tableId) {
+        var ops = CommonPlatform.platform.previewOps(server);
         LootTable table = CommonPlatform.platform.previewLootTable(server, tableId, definition);
         ServerLevel level = server.overworld();
         LootParams params = new LootParams.Builder(level)
@@ -141,7 +139,7 @@ public class EditorLootSimulation {
 
     // since these don't technically exist, but they exist in the workspace, we need to simulate them.
     // todo; add a way to save the workspace so it exports a datapack
-    private void workspaceReferences(JsonElement element, Set<Identifier> chain, int depth) throws IOException {
+    private void workspaceReferences(JsonElement element, Set<ResourceLocation> chain, int depth) throws IOException {
         if (element.isJsonArray()) {
             for (JsonElement child : element.getAsJsonArray()) {
                 workspaceReferences(child, chain, depth);
@@ -159,7 +157,7 @@ public class EditorLootSimulation {
                 || !object.get(DatapackEditorConstants.JSON_VALUE).getAsJsonPrimitive().isString()) return;
         String type = object.get(DatapackEditorConstants.JSON_TYPE).getAsString();
         if (!"minecraft:loot_table".equals(type) && !DatapackEditorConstants.PATH_LOOT_TABLE.equals(type)) return;
-        Identifier identifier = Identifier.tryParse(object.get(DatapackEditorConstants.JSON_VALUE).getAsString());
+        ResourceLocation identifier = ResourceLocation.tryParse(object.get(DatapackEditorConstants.JSON_VALUE).getAsString());
         if (identifier == null) return;
         String content = savedWorkspaceTable(identifier);
         if (content == null) return;
@@ -177,7 +175,7 @@ public class EditorLootSimulation {
         }
     }
 
-    private String savedWorkspaceTable(Identifier identifier) throws IOException {
+    private String savedWorkspaceTable(ResourceLocation identifier) throws IOException {
         for (String segment : identifier.getPath().split(DatapackEditorConstants.PATH_SEPARATOR)) {
             if (DatapackEditorConstants.PATH_CURRENT_DIRECTORY.equals(segment) || DatapackEditorConstants.PATH_PARENT_DIRECTORY.equals(segment)) return null;
         }

@@ -5,6 +5,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.progress.LoggerChunkProgressListener;
+import net.minecraft.world.RandomSequences;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -35,7 +37,8 @@ public class EditorFeatureServerLevel extends ServerLevel {
         super(source.getServer(), Runnable::run, storage,
                 new DerivedLevelData(source.getServer().getWorldData(), source.getServer().getWorldData().overworldData()),
                 Level.OVERWORLD, new LevelStem(source.dimensionTypeRegistration(), source.getChunkSource().getGenerator()),
-                false, preview.getSeed(), List.of(), false);
+                LoggerChunkProgressListener.createCompleted(), false, preview.getSeed(), List.of(), false,
+                new RandomSequences(preview.getSeed()));
         this.preview = preview;
         this.storage = storage;
         this.directory = directory;

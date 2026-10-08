@@ -10,6 +10,7 @@ pluginManagement {
                 }
             }
             filter {
+                includeGroup('fabric-loom')
                 includeGroupAndSubgroups('net.fabricmc')
             }
         }

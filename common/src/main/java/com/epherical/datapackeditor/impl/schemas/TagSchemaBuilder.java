@@ -20,7 +20,6 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static com.epherical.datapackeditor.DatapackEditorConstants.*;
 
 public class TagSchemaBuilder {
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
@@ -45,7 +44,7 @@ public class TagSchemaBuilder {
                 .forEach(schemas::add);
 
         JsonObject response = new JsonObject();
-        response.add(JSON_SCHEMAS, schemas);
+        response.add(DatapackEditorConstants.JSON_SCHEMAS, schemas);
         return response;
     }
 
@@ -54,14 +53,14 @@ public class TagSchemaBuilder {
         ResourceKey<? extends Registry<T>> key = entry.key();
         String directory = Registries.tagsDirPath(key);
         TagRegistry tagRegistry = byDirectory.computeIfAbsent(directory, TagRegistry::new);
-        tagRegistry.registryNames.add(key.identifier().toString());
+        tagRegistry.registryNames.add(key.location().toString());
         tagRegistry.keys.add(key);
         if (!enumerate) return;
-        entry.value().listElementIds()
-                .map(element -> element.identifier().toString())
+        entry.value().keySet().stream()
+                .map(Object::toString)
                 .forEach(tagRegistry.values::add);
-        entry.value().listTagIds()
-                .map(tag -> MINECRAFT_TAG_PREFIX + tag.location())
+        entry.value().getTagNames()
+                .map(tag -> DatapackEditorConstants.MINECRAFT_TAG_PREFIX + tag.location())
                 .forEach(tagRegistry.values::add);
     }
 
@@ -72,50 +71,50 @@ public class TagSchemaBuilder {
             registry.keys.forEach(key -> alternatives.add(shared.reference(key, true)));
             alternatives.add(identifierSchema);
             identifierSchema = new JsonObject();
-            identifierSchema.add(SCHEMA_ANY_OF, alternatives);
+            identifierSchema.add(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
         }
         JsonObject identifierReference = new JsonObject();
-        identifierReference.addProperty(SCHEMA_REF, "#/definitions/tag_value");
+        identifierReference.addProperty(DatapackEditorConstants.SCHEMA_REF, "#/definitions/tag_value");
         var builder = CodecJsonSchemaImpl.builder(registries)
                 .register(ExtraCodecs.TAG_OR_ELEMENT_ID, identifierReference);
         JsonObject schema = CodecJsonSchemaImpl.create(builder, TagFile.CODEC);
-        JsonObject definitions = schema.has(SCHEMA_DEFINITIONS)
-                ? schema.getAsJsonObject(SCHEMA_DEFINITIONS) : new JsonObject();
+        JsonObject definitions = schema.has(DatapackEditorConstants.SCHEMA_DEFINITIONS)
+                ? schema.getAsJsonObject(DatapackEditorConstants.SCHEMA_DEFINITIONS) : new JsonObject();
         definitions.add("tag_value", identifierSchema);
-        schema.add(SCHEMA_DEFINITIONS, definitions);
-        schema.addProperty(JSON_TITLE, String.join(", ", registry.registryNames) + " tag");
-        schema.addProperty(JSON_DESCRIPTION,
+        schema.add(DatapackEditorConstants.SCHEMA_DEFINITIONS, definitions);
+        schema.addProperty(DatapackEditorConstants.JSON_TITLE, String.join(", ", registry.registryNames) + " tag");
+        schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION,
                 "Generated from TagFile.CODEC and the running game's registry values and tags.");
 
         JsonArray fileMatch = new JsonArray();
-        fileMatch.add(PATH_DATA_FILE_GLOB_PREFIX + registry.directory + PATH_JSON_FILE_GLOB);
-        fileMatch.add(PATH_DATA_FILE_GLOB_PREFIX + registry.directory + PATH_RECURSIVE_JSON_FILE_GLOB);
+        fileMatch.add(DatapackEditorConstants.PATH_DATA_FILE_GLOB_PREFIX + registry.directory + DatapackEditorConstants.PATH_JSON_FILE_GLOB);
+        fileMatch.add(DatapackEditorConstants.PATH_DATA_FILE_GLOB_PREFIX + registry.directory + DatapackEditorConstants.PATH_RECURSIVE_JSON_FILE_GLOB);
 
         JsonObject registration = new JsonObject();
-        registration.addProperty(JSON_URI, "datapack-editor://schemas/" + registry.directory.replace('/', '_') + PATH_JSON_EXTENSION);
-        registration.add(JSON_FILE_MATCH, fileMatch);
-        registration.add(JSON_SCHEMA, schema);
+        registration.addProperty(DatapackEditorConstants.JSON_URI, "datapack-editor://schemas/" + registry.directory.replace('/', '_') + DatapackEditorConstants.PATH_JSON_EXTENSION);
+        registration.add(DatapackEditorConstants.JSON_FILE_MATCH, fileMatch);
+        registration.add(DatapackEditorConstants.JSON_SCHEMA, schema);
         return registration;
     }
 
     private static JsonObject identifierSchema(Set<String> values) {
         JsonObject syntax = new JsonObject();
-        syntax.addProperty(JSON_TYPE, SCHEMA_STRING);
-        syntax.addProperty(SCHEMA_PATTERN, "^#?(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$");
+        syntax.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_STRING);
+        syntax.addProperty(DatapackEditorConstants.SCHEMA_PATTERN, "^#?(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$");
         if (values.isEmpty()) return syntax;
 
         JsonArray knownValues = new JsonArray();
         values.stream().sorted().forEach(knownValues::add);
         JsonObject known = new JsonObject();
-        known.addProperty(JSON_TYPE, SCHEMA_STRING);
-        known.add(SCHEMA_ENUM, knownValues);
+        known.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_STRING);
+        known.add(DatapackEditorConstants.SCHEMA_ENUM, knownValues);
 
         JsonArray alternatives = new JsonArray();
         alternatives.add(known);
         alternatives.add(syntax);
         JsonObject result = new JsonObject();
-        result.addProperty(JSON_TYPE, SCHEMA_STRING);
-        result.add(SCHEMA_ANY_OF, alternatives);
+        result.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_STRING);
+        result.add(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
         return result;
     }
 

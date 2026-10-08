@@ -27,7 +27,7 @@ public class RegistrySchemaCache {
     }
 
     public JsonObject reference(ResourceKey<? extends Registry<?>> key, boolean tags) {
-        String uri = baseUri + "&registry=" + URLEncoder.encode(key.identifier().toString(), StandardCharsets.UTF_8)
+        String uri = baseUri + "&registry=" + URLEncoder.encode(key.location().toString(), StandardCharsets.UTF_8)
                 + "&tags=" + tags;
         if (!schemas.containsKey(uri)) {
             long previous = estimatedBytes;
@@ -58,7 +58,7 @@ public class RegistrySchemaCache {
         long previous = estimatedBytes;
         try {
             registries.lookup(key).ifPresent(lookup -> {
-                lookup.listElementIds().forEach(id -> add(values, id.identifier().toString()));
+                lookup.listElementIds().forEach(id -> add(values, id.location().toString()));
                 if (tags) lookup.listTagIds().forEach(id -> add(values, DatapackEditorConstants.MINECRAFT_TAG_PREFIX + id.location()));
             });
             JsonObject result = new JsonObject();

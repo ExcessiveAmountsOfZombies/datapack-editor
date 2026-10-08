@@ -6,7 +6,7 @@ import com.mojang.serialization.Codec;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
@@ -62,12 +62,12 @@ public abstract class CommonPlatform<T> {
     public void configureDatapackSchema(CodecJsonSchema.Builder builder, Codec<?> codec) {
     }
 
-    public LootTable previewLootTable(MinecraftServer server, Identifier id, JsonElement definition) {
+    public LootTable previewLootTable(MinecraftServer server, ResourceLocation id, JsonElement definition) {
         return LootTable.DIRECT_CODEC.parse(previewOps(server), definition).getOrThrow(JsonParseException::new);
     }
 
     public RegistryOps<JsonElement> previewOps(MinecraftServer server) {
-        return server.reloadableRegistries().lookup().createSerializationContext(JsonOps.INSTANCE);
+        return RegistryOps.create(JsonOps.INSTANCE, server.reloadableRegistries().get());
     }
 
     public boolean previewConditionsMatch(MinecraftServer server, JsonElement definition) {

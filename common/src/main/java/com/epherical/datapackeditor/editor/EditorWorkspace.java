@@ -8,7 +8,7 @@ import com.google.gson.JsonParser;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
-import org.jspecify.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -371,7 +371,7 @@ public class EditorWorkspace {
         return getEscapedString(value);
     }
 
-    @NonNull
+    @NotNull
     public static String getEscapedString(String value) {
         StringBuilder escaped = new StringBuilder(value.length() + 16);
         for (int index = 0; index < value.length(); index++) {

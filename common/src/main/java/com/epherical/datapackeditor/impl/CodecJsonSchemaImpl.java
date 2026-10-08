@@ -32,6 +32,8 @@ import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.component.DebugStickState;
 import com.epherical.datapackeditor.impl.schemas.BlockStateSchema;
+import com.epherical.datapackeditor.impl.schemas.IngredientSchema;
+import net.minecraft.world.item.crafting.Ingredient;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -299,6 +301,8 @@ public class CodecJsonSchemaImpl {
             }
             if (codec == BlockState.CODEC) return BlockStateSchema.create(new SchemaContext(this));
             if (codec == DebugStickState.CODEC) return BlockStateSchema.debugStick(new SchemaContext(this));
+            if (codec == Ingredient.CODEC) return IngredientSchema.create(new SchemaContext(this), true);
+            if (codec == Ingredient.CODEC_NONEMPTY) return IngredientSchema.create(new SchemaContext(this), false);
             if (codec == Codec.BOOL) return type(DatapackEditorConstants.SCHEMA_BOOLEAN);
             if (codec == Codec.BYTE || codec == Codec.SHORT || codec == Codec.INT || codec == Codec.LONG) {
                 return type(DatapackEditorConstants.SCHEMA_INTEGER);
@@ -511,35 +515,29 @@ public class CodecJsonSchemaImpl {
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         private JsonElement inferDispatch(KeyDispatchCodec<?, ?> dispatch) {
-            MapCodec keyCodec = (MapCodec) readField(dispatch, DatapackEditorConstants.CODEC_KEY_CODEC);
+            Codec keyCodec = (Codec) readField(dispatch, DatapackEditorConstants.CODEC_KEY_CODEC);
+            String typeKey = (String) readField(dispatch, "typeKey");
             Function decoder = (Function) readField(dispatch, "decoder");
-            if (keyCodec == null || decoder == null) {
+            if (keyCodec == null || typeKey == null || decoder == null) {
                 return unknown(dispatch);
             }
-            List<RecordField> discriminatorFields = collectRecordFields(keyCodec);
-            if (discriminatorFields.size() != 1) {
-                return unknown(dispatch);
-            }
-            RecordField discriminator = discriminatorFields.getFirst();
-            List<String> values = enumValues(infer(discriminator.codec()));
+            List<String> values = enumValues(infer(keyCodec));
             if (values.isEmpty()) {
                 return unknown(dispatch);
             }
 
             JsonObject root = objectSchema();
             JsonObject rootProperties = new JsonObject();
-            rootProperties.add(discriminator.name(), stringEnum(values));
+            rootProperties.add(typeKey, stringEnum(values));
             root.add(DatapackEditorConstants.JSON_PROPERTIES, rootProperties);
-            root.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(List.of(discriminator.name())));
+            root.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(List.of(typeKey)));
 
             JsonArray variants = new JsonArray();
             for (String value : values) {
                 checkpoint();
-                JsonObject encodedKey = new JsonObject();
-                encodedKey.addProperty(discriminator.name(), value);
-                Optional<?> decodedKey = keyCodec.codec().parse(ops, encodedKey).result();
+                Optional<?> decodedKey = keyCodec.parse(ops, new JsonPrimitive(value)).result();
                 if (decodedKey.isEmpty()) {
-                    variants.add(discriminatorOnly(discriminator.name(), value));
+                    variants.add(discriminatorOnly(typeKey, value));
                     continue;
                 }
                 Object result;
@@ -547,18 +545,18 @@ public class CodecJsonSchemaImpl {
                     result = decoder.apply(decodedKey.get());
                 } catch (RuntimeException exception) {
                     if (exception instanceof CancellationException) throw exception;
-                    variants.add(discriminatorOnly(discriminator.name(), value));
+                    variants.add(discriminatorOnly(typeKey, value));
                     continue;
                 }
                 Object variantDecoder = result instanceof DataResult<?> dataResult ? dataResult.result().orElse(null) : result;
-                JsonObject constraint = discriminatorOnly(discriminator.name(), value);
+                JsonObject constraint = discriminatorOnly(typeKey, value);
                 JsonElement body = variantDecoder == null ? new JsonObject() : inferMapDecoder(variantDecoder);
                 JsonElement resolved = resolve(body);
                 JsonObject variant;
                 if (resolved.isJsonObject() && resolved.getAsJsonObject().has(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES)
                         && resolved.getAsJsonObject().get(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES).equals(new JsonPrimitive(false))) {
                     variant = resolved.getAsJsonObject().deepCopy();
-                    addDiscriminator(variant, discriminator.name(), value);
+                    addDiscriminator(variant, typeKey, value);
                 } else {
                     variant = object(DatapackEditorConstants.SCHEMA_ALL_OF, arrayOf(body, constraint));
                 }
@@ -639,21 +637,21 @@ public class CodecJsonSchemaImpl {
             checkpoint();
             if (node == null || depth > DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return;
             switch (node) {
-                case OptionalFieldCodec<?> _ -> {
+                case OptionalFieldCodec<?> unused1 -> {
                     Object name = readField(node, DatapackEditorConstants.JSON_NAME);
                     Object element = readField(node, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
                     if (name instanceof String string && element != null)
                         result.add(new RecordField(string, element, true));
                     return;
                 }
-                case FieldDecoder<?> _ -> {
+                case FieldDecoder<?> unused2 -> {
                     Object name = readField(node, DatapackEditorConstants.JSON_NAME);
                     Object element = readField(node, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
                     if (name instanceof String string && element != null)
                         result.add(new RecordField(string, element, false));
                     return;
                 }
-                case KeyDispatchCodec<?, ?> _ -> {
+                case KeyDispatchCodec<?, ?> unused3 -> {
                     return;
                 }
                 default -> {
@@ -696,7 +694,7 @@ public class CodecJsonSchemaImpl {
             while (!pending.isEmpty() && visited++ < 256) {
                 Object candidate = pending.removeFirst();
                 if (!seen.add(candidate)) continue;
-                if (candidate == BlockState.CODEC || candidate == DebugStickState.CODEC || hasCustomization(candidate)
+                if (candidate == BlockState.CODEC || candidate == DebugStickState.CODEC || candidate == Ingredient.CODEC || candidate == Ingredient.CODEC_NONEMPTY || hasCustomization(candidate)
                         || candidate instanceof ListCodec<?> || candidate instanceof EitherCodec<?, ?> || candidate instanceof XorCodec<?, ?> || candidate instanceof UnboundedMapCodec<?, ?> || candidate instanceof SimpleMapCodec<?, ?> || candidate instanceof DispatchedMapCodec<?, ?> || candidate instanceof PairCodec<?, ?> || candidate instanceof CompoundListCodec<?, ?> || candidate instanceof KeyDispatchCodec<?, ?> || candidate instanceof MapCodec.MapCodecCodec<?> || isMinecraftStructuralCodec(candidate)) {
                     return candidate;
                 }
@@ -821,7 +819,7 @@ public class CodecJsonSchemaImpl {
         public JsonElement registryReference(ResourceKey<? extends Registry<?>> key, boolean includeTags) {
             checkpoint();
             if (sharedRegistries != null) return sharedRegistries.reference(key, includeTags);
-            String definition = "registry_" + sanitize(key.identifier().toString()) + (includeTags ? "_or_tag" : "");
+            String definition = "registry_" + sanitize(key.location().toString()) + (includeTags ? "_or_tag" : "");
             if (!definitions.has(definition)) {
                 List<String> values = registryValues(key, includeTags);
                 definitions.add(definition, values.isEmpty() ? type(DatapackEditorConstants.SCHEMA_STRING) : stringEnum(values));
@@ -834,7 +832,7 @@ public class CodecJsonSchemaImpl {
             Optional<? extends HolderLookup.RegistryLookup<Object>> lookup = (Optional) registries.lookup((ResourceKey) key);
             if (lookup.isEmpty()) return List.of();
             Set<String> values = new LinkedHashSet<>();
-            lookup.get().listElementIds().map(ResourceKey::identifier).map(Identifier::toString).forEach(values::add);
+            lookup.get().listElementIds().map(ResourceKey::location).map(ResourceLocation::toString).forEach(values::add);
             if (includeTags) lookup.get().listTagIds().map(tag -> DatapackEditorConstants.MINECRAFT_TAG_PREFIX + tag.location()).forEach(values::add);
             return values.stream().sorted().toList();
         }

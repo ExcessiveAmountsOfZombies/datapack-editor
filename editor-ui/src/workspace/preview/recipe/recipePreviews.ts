@@ -12,7 +12,7 @@ registerRecipePreview({
     label: "Crafting (shaped)",
     component: vanilla({kind: "shaped", texture: "crafting_table.png"}),
     create: () => ({type: "minecraft:crafting_shaped", category: "misc", pattern: ["A"],
-        key: {A: "minecraft:stone"}, result: {id: "minecraft:stone"}})
+        key: {A: {item: "minecraft:stone"}}, result: {id: "minecraft:stone"}})
 });
 
 registerRecipePreview({
@@ -21,12 +21,12 @@ registerRecipePreview({
     component: vanilla({kind: "shapeless", texture: "crafting_table.png",
         notice: "Shapeless ingredients fill the grid in list order."}),
     create: () => ({type: "minecraft:crafting_shapeless", category: "misc",
-        ingredients: ["minecraft:stone"], result: {id: "minecraft:stone"}})
+        ingredients: [{item: "minecraft:stone"}], result: {id: "minecraft:stone"}})
 });
 
 function registerCooking(id: string, label: string, texture: string, cookingTime: number, notice?: string) {
     registerRecipePreview({id, label, component: vanilla({kind: "cooking", texture, cookingTime, notice}),
-        create: () => ({type: id, category: "misc", ingredient: "minecraft:stone",
+        create: () => ({type: id, category: "misc", ingredient: {item: "minecraft:stone"},
             result: {id: "minecraft:stone"}, experience: 0, cookingtime: cookingTime})});
 }
 
@@ -39,21 +39,21 @@ registerRecipePreview({
     id: "minecraft:stonecutting",
     label: "Stonecutting",
     component: vanilla({kind: "stonecutting", texture: "stonecutter.png"}),
-    create: () => ({type: "minecraft:stonecutting", ingredient: "minecraft:stone", result: {id: "minecraft:stone"}})
+    create: () => ({type: "minecraft:stonecutting", ingredient: {item: "minecraft:stone"}, result: {id: "minecraft:stone"}})
 });
 
 registerRecipePreview({
     id: "minecraft:smithing_transform",
     label: "Smithing (upgrade)",
     component: vanilla({kind: "smithing_transform", texture: "smithing.png"}),
-    create: () => ({type: "minecraft:smithing_transform", template: "minecraft:netherite_upgrade_smithing_template",
-        base: "minecraft:diamond_sword", addition: "minecraft:netherite_ingot", result: {id: "minecraft:netherite_sword"}})
+    create: () => ({type: "minecraft:smithing_transform", template: {item: "minecraft:netherite_upgrade_smithing_template"},
+        base: {item: "minecraft:diamond_sword"}, addition: {item: "minecraft:netherite_ingot"}, result: {id: "minecraft:netherite_sword"}})
 });
 
 registerRecipePreview({
     id: "minecraft:smithing_trim",
     label: "Smithing (trim)",
     component: vanilla({kind: "smithing_trim", texture: "smithing.png"}),
-    create: () => ({type: "minecraft:smithing_trim", template: "minecraft:sentry_armor_trim_smithing_template",
-        base: "minecraft:iron_chestplate", addition: "minecraft:iron_ingot", pattern: "minecraft:sentry"})
+    create: () => ({type: "minecraft:smithing_trim", template: {item: "minecraft:sentry_armor_trim_smithing_template"},
+        base: {item: "minecraft:iron_chestplate"}, addition: {item: "minecraft:iron_ingot"}})
 });

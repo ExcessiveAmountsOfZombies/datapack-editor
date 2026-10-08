@@ -46,25 +46,28 @@ export function setSlot(recipe: RecipeObject, slot: RecipeSlot, id: unknown): Re
     if (slot === "result") {
         if (id) next.result = {...(typeof recipe.result === "object" ? recipe.result as RecipeObject : {}), id};
         else delete next.result;
-    } else if (slot.startsWith("grid")) {
-        const index = Number(slot.slice(4));
-        if (recipe.type === "minecraft:crafting_shapeless") {
-            const ingredients = Array.isArray(recipe.ingredients) ? [...recipe.ingredients] : [];
-            ingredients[index] = id;
-            next.ingredients = ingredients.filter(Boolean);
-        } else {
-            const values = Array.from({length: 9}, (_, at) => slotValue(recipe, `grid${at}`));
-            values[index] = id;
-            const key: RecipeObject = {};
-            const symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-            const ids = [...new Set(values.filter(item => item != null).map(item => JSON.stringify(item)))];
-            ids.forEach((item, at) => { key[symbols[at]] = JSON.parse(item); });
-            next.key = key;
-            next.pattern = [0, 1, 2].map(row => values.slice(row * 3, row * 3 + 3)
-                .map(item => item != null ? symbols[ids.indexOf(JSON.stringify(item))] : " ").join(""));
-        }
-    } else if (id) next[slot] = id;
-    else delete next[slot];
+    } else {
+        if (typeof id === "string") id = id.startsWith("#") ? {tag: id.slice(1)} : {item: id};
+        if (slot.startsWith("grid")) {
+            const index = Number(slot.slice(4));
+            if (recipe.type === "minecraft:crafting_shapeless") {
+                const ingredients = Array.isArray(recipe.ingredients) ? [...recipe.ingredients] : [];
+                ingredients[index] = id;
+                next.ingredients = ingredients.filter(Boolean);
+            } else {
+                const values = Array.from({length: 9}, (_, at) => slotValue(recipe, `grid${at}`));
+                values[index] = id;
+                const key: RecipeObject = {};
+                const symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                const ids = [...new Set(values.filter(item => item != null).map(item => JSON.stringify(item)))];
+                ids.forEach((item, at) => { key[symbols[at]] = JSON.parse(item); });
+                next.key = key;
+                next.pattern = [0, 1, 2].map(row => values.slice(row * 3, row * 3 + 3)
+                    .map(item => item != null ? symbols[ids.indexOf(JSON.stringify(item))] : " ").join(""));
+            }
+        } else if (id) next[slot] = id;
+        else delete next[slot];
+    }
     return next;
 }
 
