@@ -24,8 +24,8 @@ public class RecipeSchemaBuilder {
 
     public static JsonObject buildSchema(HolderLookup.Provider registries) {
         CodecJsonSchema.Builder builder = CodecJsonSchemaImpl.builder(registries);
-        if (CommonPlatform.platform != null) CommonPlatform.platform.configureDatapackSchema(builder, Recipe.CODEC);
-        JsonObject schema = CodecJsonSchemaImpl.create(builder, Recipe.CODEC);
+        if (CommonPlatform.platform != null) CommonPlatform.platform.configureDatapackSchema(builder, Recipe.DIRECT_CODEC);
+        JsonObject schema = CodecJsonSchemaImpl.create(builder, Recipe.DIRECT_CODEC);
         schema.addProperty(DatapackEditorConstants.JSON_TITLE, "Minecraft recipe");
         // todo; provide better description
         schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, "Minecraft recipe schema, for vanilla and modded recipes if they're registered. Pulls items, tags, and recipe types from the live server.");

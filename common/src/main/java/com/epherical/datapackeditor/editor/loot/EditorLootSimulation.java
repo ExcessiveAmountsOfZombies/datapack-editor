@@ -155,14 +155,23 @@ public class EditorLootSimulation {
         }
         if (!object.has(DatapackEditorConstants.JSON_TYPE) || !object.get(DatapackEditorConstants.JSON_TYPE).isJsonPrimitive()
                 || !object.get(DatapackEditorConstants.JSON_TYPE).getAsJsonPrimitive().isString()
-                || !object.has(DatapackEditorConstants.JSON_VALUE) || !object.get(DatapackEditorConstants.JSON_VALUE).isJsonPrimitive()
-                || !object.get(DatapackEditorConstants.JSON_VALUE).getAsJsonPrimitive().isString()) return;
+                || !object.has(DatapackEditorConstants.JSON_VALUE)) return;
         String type = object.get(DatapackEditorConstants.JSON_TYPE).getAsString();
         if (!"minecraft:loot_table".equals(type) && !DatapackEditorConstants.PATH_LOOT_TABLE.equals(type)) return;
-        Identifier identifier = Identifier.tryParse(object.get(DatapackEditorConstants.JSON_VALUE).getAsString());
-        if (identifier == null) return;
+        object.add(DatapackEditorConstants.JSON_VALUE, workspaceTableReference(object.get(DatapackEditorConstants.JSON_VALUE), chain, depth));
+    }
+
+    private JsonElement workspaceTableReference(JsonElement value, Set<Identifier> chain, int depth) throws IOException {
+        if (value.isJsonArray()) {
+            JsonArray resolved = new JsonArray();
+            for (JsonElement child : value.getAsJsonArray()) resolved.add(workspaceTableReference(child, chain, depth));
+            return resolved;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) return value;
+        Identifier identifier = Identifier.tryParse(value.getAsString());
+        if (identifier == null) return value;
         String content = savedWorkspaceTable(identifier);
-        if (content == null) return;
+        if (content == null) return value;
         if (depth >= DatapackEditorConstants.PREVIEW_MAX_REFERENCE_DEPTH) {
             throw new IllegalArgumentException("Your loot table reference is too deep, only 32 layers are allowed: " + identifier);
         } else if (!chain.add(identifier)) {
@@ -171,7 +180,7 @@ public class EditorLootSimulation {
         try {
             JsonElement nested = JsonParser.parseString(content);
             workspaceReferences(nested, chain, depth + 1);
-            object.add(DatapackEditorConstants.JSON_VALUE, nested);
+            return nested;
         } finally {
             chain.remove(identifier);
         }

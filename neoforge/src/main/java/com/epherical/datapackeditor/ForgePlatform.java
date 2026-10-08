@@ -52,7 +52,12 @@ public class ForgePlatform extends CommonPlatform<ForgePlatform> {
 
     @Override
     public List<RegistryDataLoader.RegistryData<?>> datapackRegistries() {
-        return DataPackRegistriesHooks.getDataPackRegistries();
+        return DataPackRegistriesHooks.getWorldRegistries();
+    }
+
+    @Override
+    public List<RegistryDataLoader.RegistryData<?>> reloadableDatapackRegistries() {
+        return DataPackRegistriesHooks.getReloadableRegistries();
     }
 
     @Override

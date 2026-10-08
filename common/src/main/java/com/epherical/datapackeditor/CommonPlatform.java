@@ -51,7 +51,12 @@ public abstract class CommonPlatform<T> {
 
     /** Datapack registries actually loaded by this platform, including mod registries. */
     public List<RegistryDataLoader.RegistryData<?>> datapackRegistries() {
-        return RegistryDataLoader.WORLDGEN_REGISTRIES;
+        return RegistryDataLoader.WORLD_REGISTRIES;
+    }
+
+    /** Reloadable datapack registries, including loader registrations. */
+    public List<RegistryDataLoader.RegistryData<?>> reloadableDatapackRegistries() {
+        return RegistryDataLoader.RELOADABLE_REGISTRIES;
     }
 
     /** Loader resources discovered at runtime, with their optional schemas in each registration. */

@@ -16,7 +16,7 @@ import com.mojang.serialization.codecs.ListCodec;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.HolderSetCodec;
+import net.minecraft.core.registries.codec.HolderSetCodec;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
@@ -159,14 +159,14 @@ public class NeoForgeSchemas {
                 dispatch(context, NeoForgeRegistries.BIOME_MODIFIER_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity()));
         CodecJsonSchema.registerProvider(StructureModifier.DIRECT_CODEC, context ->
                 dispatch(context, NeoForgeRegistries.STRUCTURE_MODIFIER_SERIALIZERS, DatapackEditorConstants.JSON_TYPE, Function.identity()));
-        for (Codec<?> codec : new Codec<?>[]{Recipe.CODEC, Advancement.CODEC, LootTable.DIRECT_CODEC,
-                LootPool.CODEC, LootPoolEntries.CODEC, LootItemFunctions.ROOT_CODEC,
+        for (Codec<?> codec : new Codec<?>[]{Recipe.DIRECT_CODEC, Advancement.CODEC, LootTable.DIRECT_CODEC,
+                LootPool.CODEC, LootPoolEntries.CODEC, LootItemFunctions.TYPED_CODEC,
                 IGlobalLootModifier.DIRECT_CODEC, BiomeModifier.DIRECT_CODEC, StructureModifier.DIRECT_CODEC}) {
             CodecJsonSchema.registerAdapter(codec, NeoForgeSchemas::withConditions);
         }
         DataPackRegistration.directory("loot_modifiers").schema(IGlobalLootModifier.DIRECT_CODEC)
                 .title("NeoForge global loot modifier")
-                .description("Loaded automatically from loot_modifiers in NeoForge 26.2; higher priority runs first.")
+                .description("Loaded automatically from loot_modifiers in NeoForge 26.3; higher priority runs first.")
                 .register();
         DataPackRegistration.file(Identifier.parse("neoforge:recipe_priorities.json")).schema(Codec.PASSTHROUGH)
                 .title("NeoForge recipe priorities")
@@ -230,26 +230,30 @@ public class NeoForgeSchemas {
         if (!(codec instanceof HolderSetCodec<?>)) return null;
         // Preserve the actual element/list and custom dispatch codecs, but describe
         // hashed tags explicitly: generic string-codec inference loses their '#'.
-        Codec<?> custom = (Codec<?>) field(codec, "forgeDispatchCodec");
+        Codec<?> custom = (Codec<?>) field(codec, "customDispatchCodec");
         ResourceKey<? extends Registry<?>> registry = (ResourceKey<? extends Registry<?>>) field(codec, DatapackEditorConstants.CODEC_REGISTRY_KEY);
-        Codec<?> list = (Codec<?>) field(codec, "homogenousListCodec");
-        Codec<?> element = (Codec<?>) field(codec, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
-        HolderSetSchemaKey key = new HolderSetSchemaKey(registry, element, holderSetRequiresList(list));
+        Object taggedValues = field(codec, DatapackEditorConstants.CODEC_HOLDER_SET_VALUES);
+        Codec<?> list = (Codec<?>) field(taggedValues, DatapackEditorConstants.CODEC_SECOND);
+        HolderSetShape shape = holderSetShape(list);
+        HolderSetSchemaKey key = new HolderSetSchemaKey(registry, shape.element(), shape.requiresList());
         // HolderSetType.makeCodec creates new child holder-set instances. Share
         // their semantic family before dispatching into those recursive children.
         return context.sharedDefinition(key, () ->
                 alternatives(context.schema(custom), holderSetTag(context, registry), context.schema(list)));
     }
 
-    private static boolean holderSetRequiresList(Codec<?> list) {
+    private static HolderSetShape holderSetShape(Codec<?> list) {
         ArrayDeque<Object> wrappers = new ArrayDeque<>();
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         wrappers.add(list);
         for (int visited = 0; !wrappers.isEmpty() && visited < DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH; visited++) {
             Object current = wrappers.removeFirst();
             if (!seen.add(current)) continue;
-            if (current instanceof ListCodec<?>) return true;
-            if (current instanceof EitherCodec<?, ?>) return false;
+            if (current instanceof ListCodec<?> values) return new HolderSetShape(values.elementCodec(), true);
+            if (current instanceof EitherCodec<?, ?>) {
+                ListCodec<?> values = (ListCodec<?>) field(current, DatapackEditorConstants.CODEC_FIRST);
+                return new HolderSetShape(values.elementCodec(), false);
+            }
             for (Class<?> type = current.getClass(); type != null; type = type.getSuperclass()) {
                 for (Field candidate : type.getDeclaredFields()) {
                     if (Modifier.isStatic(candidate.getModifiers())) continue;
@@ -266,6 +270,9 @@ public class NeoForgeSchemas {
         throw new IllegalStateException("Unrecognized NeoForge holder-set list codec");
     }
 
+    private record HolderSetShape(Codec<?> element, boolean requiresList) {
+    }
+
     private record HolderSetSchemaKey(ResourceKey<? extends Registry<?>> registry, Codec<?> element, boolean requiresList) {
         public boolean equals(Object other) {
             return other instanceof HolderSetSchemaKey key && registry.equals(key.registry)
@@ -280,7 +287,7 @@ public class NeoForgeSchemas {
     private static JsonElement holderSetTag(SchemaContext context, ResourceKey<? extends Registry<?>> registry) {
         JsonObject tag = new JsonObject();
         tag.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_STRING);
-        tag.addProperty(DatapackEditorConstants.SCHEMA_PATTERN, "^#(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$");
+        tag.addProperty(DatapackEditorConstants.SCHEMA_PATTERN, DatapackEditorConstants.MINECRAFT_TAG_ID_PATTERN);
         JsonObject values = context.resolve(context.registry(registry, true)).getAsJsonObject();
         JsonArray tags = new JsonArray();
         if (values.has(DatapackEditorConstants.SCHEMA_ENUM)) {

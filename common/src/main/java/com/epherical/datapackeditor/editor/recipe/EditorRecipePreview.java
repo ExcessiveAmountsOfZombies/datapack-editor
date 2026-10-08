@@ -70,7 +70,7 @@ public class EditorRecipePreview {
         boolean enabled = CommonPlatform.platform.previewConditionsMatch(server, definition);
         result.addProperty(JSON_ENABLED, enabled);
         if (!enabled) return result;
-        Recipe<?> recipe = Recipe.CODEC.parse(CommonPlatform.platform.previewOps(server), definition).getOrThrow(JsonParseException::new);
+        Recipe<?> recipe = Recipe.DIRECT_CODEC.parse(CommonPlatform.platform.previewOps(server), definition).getOrThrow(JsonParseException::new);
         var adapter = ADAPTERS.get(BuiltInRegistries.RECIPE_SERIALIZER.getKey(recipe.getSerializer()));
         List<Display> displays = adapter == null ? recipe.display().stream().map(EditorRecipePreview::standardDisplay).toList()
                 : adapter.apply(server, recipe);

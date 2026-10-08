@@ -1,6 +1,7 @@
 package com.epherical.datapackeditor.editor.assets;
 
 import com.epherical.datapackeditor.DatapackEditorConstants;
+import com.epherical.datapackeditor.CommonPlatform;
 import com.epherical.datapackeditor.editor.MemoryChecker;
 import com.epherical.datapackeditor.editor.MemoryChecker.CapacityException;
 import com.epherical.datapackeditor.editor.EditorWorkspace;
@@ -17,11 +18,11 @@ import io.javalin.http.HttpStatus;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.level.storage.loot.LootDataType;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -86,14 +87,13 @@ public class EditorDatapacks {
             directories.add(topLevelDirectory(Registries.elementsDirPath(registryKey)));
             directories.add(topLevelDirectory(Registries.tagsDirPath(registryKey)));
         });
-        // these two managers use registry-shaped paths but are not part of the server's RegistryAccess snapshot
-        directories.add(topLevelDirectory(Registries.elementsDirPath(Registries.ADVANCEMENT)));
-        directories.add(topLevelDirectory(Registries.elementsDirPath(Registries.RECIPE)));
-        // Loot tables, predicates, and item modifiers live in reloadable
-        // registries, so their resource paths are also absent from the
-        // server's RegistryAccess snapshot.
-        LootDataType.values().forEach(data -> directories.add(
-                topLevelDirectory(Registries.elementsDirPath(data.registryKey()))));
+        // Reloadable registries are separate from the world's RegistryAccess snapshot.
+        var reloadable = CommonPlatform.platform == null ? RegistryDataLoader.RELOADABLE_REGISTRIES
+                : CommonPlatform.platform.reloadableDatapackRegistries();
+        reloadable.forEach(data -> {
+            directories.add(topLevelDirectory(Registries.elementsDirPath(data.key())));
+            directories.add(topLevelDirectory(Registries.tagsDirPath(data.key())));
+        });
         // Vanilla's optional built-in packs are stored below
         // data/minecraft/datapacks rather than a registry directory.
         directories.add("datapacks");

@@ -27,6 +27,9 @@ import com.mojang.serialization.codecs.XorCodec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.codec.HolderSetCodec;
+import net.minecraft.core.registries.codec.RegistryFixedCodec;
+import net.minecraft.core.registries.codec.RegistryFileCodec;
 import net.minecraft.resources.*;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.level.block.state.BlockState;
@@ -61,6 +64,7 @@ import com.epherical.datapackeditor.api.schema.CodecJsonSchema.SchemaContext;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema.SchemaProvider;
 import com.epherical.datapackeditor.api.schema.CodecJsonSchema.SchemaInspector;
 
+import static com.epherical.datapackeditor.DatapackEditorConstants.*;
 import static com.epherical.datapackeditor.api.schema.CodecJsonSchema.ADAPTERS;
 import static com.epherical.datapackeditor.api.schema.CodecJsonSchema.INSPECTORS;
 import static com.epherical.datapackeditor.api.schema.CodecJsonSchema.OVERRIDES;
@@ -81,7 +85,7 @@ public class CodecJsonSchemaImpl {
     }
 
     public static JsonObject pruneDefinitions(JsonObject schema) {
-        JsonObject definitions = schema.getAsJsonObject(DatapackEditorConstants.SCHEMA_DEFINITIONS);
+        JsonObject definitions = schema.getAsJsonObject(SCHEMA_DEFINITIONS);
         if (definitions == null) return schema;
         Set<String> reachable = new LinkedHashSet<>();
         Set<JsonElement> visited = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -93,16 +97,16 @@ public class CodecJsonSchemaImpl {
             if (value.isJsonArray()) value.getAsJsonArray().forEach(pending::add);
             if (!value.isJsonObject()) continue;
             JsonObject object = value.getAsJsonObject();
-            if (object != schema && (object.has("$id") || object.has(DatapackEditorConstants.SCHEMA_DEFINITIONS))) return schema;
-            if (object.has(DatapackEditorConstants.SCHEMA_REF) && object.get(DatapackEditorConstants.SCHEMA_REF).isJsonPrimitive()) {
-                String ref = object.get(DatapackEditorConstants.SCHEMA_REF).getAsString();
-                if (ref.startsWith(DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX)) {
-                    String name = ref.substring(DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX.length()).split(DatapackEditorConstants.PATH_SEPARATOR, 2)[0].replace(DatapackEditorConstants.SCHEMA_ESCAPED_SLASH, DatapackEditorConstants.PATH_SEPARATOR).replace(DatapackEditorConstants.SCHEMA_ESCAPED_TILDE, DatapackEditorConstants.SCHEMA_POINTER_TILDE);
+            if (object != schema && (object.has("$id") || object.has(SCHEMA_DEFINITIONS))) return schema;
+            if (object.has(SCHEMA_REF) && object.get(SCHEMA_REF).isJsonPrimitive()) {
+                String ref = object.get(SCHEMA_REF).getAsString();
+                if (ref.startsWith(SCHEMA_DEFINITIONS_PREFIX)) {
+                    String name = ref.substring(SCHEMA_DEFINITIONS_PREFIX.length()).split(PATH_SEPARATOR, 2)[0].replace(SCHEMA_ESCAPED_SLASH, PATH_SEPARATOR).replace(SCHEMA_ESCAPED_TILDE, SCHEMA_POINTER_TILDE);
                     if (reachable.add(name) && definitions.has(name)) pending.add(definitions.get(name));
                 }
             }
             object.entrySet().forEach(entry -> {
-                if (object != schema || !entry.getKey().equals(DatapackEditorConstants.SCHEMA_DEFINITIONS)) pending.add(entry.getValue());
+                if (object != schema || !entry.getKey().equals(SCHEMA_DEFINITIONS)) pending.add(entry.getValue());
             });
         }
         definitions.keySet().removeIf(name -> !reachable.contains(name));
@@ -182,9 +186,9 @@ public class CodecJsonSchemaImpl {
         }
 
         public JsonObject create(Object codec) {
-            JsonObject schema = object(DatapackEditorConstants.SCHEMA_ALL_OF, arrayOf(infer(codec)));
+            JsonObject schema = object(SCHEMA_ALL_OF, arrayOf(infer(codec)));
             schema.addProperty("$schema", "http://json-schema.org/draft-07/schema#");
-            if (!definitions.isEmpty()) schema.add(DatapackEditorConstants.SCHEMA_DEFINITIONS, definitions);
+            if (!definitions.isEmpty()) schema.add(SCHEMA_DEFINITIONS, definitions);
             return pruneDefinitions(schema);
         }
 
@@ -192,13 +196,13 @@ public class CodecJsonSchemaImpl {
             checkpoint();
             if (codec == null) return unknown(null);
             String existing = memoizedDefinitions.get(codec);
-            if (existing != null) return object(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + existing);
+            if (existing != null) return object(SCHEMA_REF, SCHEMA_DEFINITIONS_PREFIX + existing);
             String definition = "codec_" + ++nextMemoizedDefinition;
             memoizedDefinitions.put(codec, definition);
             definitions.add(definition, new JsonObject());
             JsonElement result = adapt(codec, inferSource(codec));
             definitions.add(definition, result);
-            return object(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + definition);
+            return object(SCHEMA_REF, SCHEMA_DEFINITIONS_PREFIX + definition);
         }
 
         private JsonElement inferSource(Object codec) {
@@ -232,12 +236,12 @@ public class CodecJsonSchemaImpl {
             JsonElement adapted = inferred;
             SchemaAdapter global = ADAPTERS.get(codec);
             if (global != null) {
-                JsonElement replacement = Objects.requireNonNull(global.adapt(context, adapted), DatapackEditorConstants.MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL);
+                JsonElement replacement = Objects.requireNonNull(global.adapt(context, adapted), MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL);
                 adapted = replacement == adapted ? adapted : replacement.deepCopy();
             }
             SchemaAdapter local = localAdapters.get(codec);
             if (local != null) {
-                JsonElement replacement = Objects.requireNonNull(local.adapt(context, adapted), DatapackEditorConstants.MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL);
+                JsonElement replacement = Objects.requireNonNull(local.adapt(context, adapted), MESSAGE_SCHEMA_ADAPTER_RETURNED_NULL);
                 adapted = replacement == adapted ? adapted : replacement.deepCopy();
             }
             return adapted;
@@ -250,14 +254,14 @@ public class CodecJsonSchemaImpl {
                 JsonElement value = Objects.requireNonNull(schema.get(), "Definition supplier returned null");
                 definitions.add(definition, value.deepCopy());
             }
-            return object(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + definition);
+            return object(SCHEMA_REF, SCHEMA_DEFINITIONS_PREFIX + definition);
         }
 
         public JsonElement sharedDefinition(Object key, Supplier<? extends JsonElement> schema) {
             checkpoint();
             Objects.requireNonNull(key, "Definition key");
             String existing = familyDefinitions.get(key);
-            if (existing != null) return object(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + existing);
+            if (existing != null) return object(SCHEMA_REF, SCHEMA_DEFINITIONS_PREFIX + existing);
             String name = "family_" + familyDefinitions.size();
             while (definitions.has(name)) name += "_";
             familyDefinitions.put(key, name);
@@ -265,7 +269,7 @@ public class CodecJsonSchemaImpl {
         }
 
         private static String validateDefinitionName(String name) {
-            String value = Objects.requireNonNull(name, DatapackEditorConstants.JSON_NAME);
+            String value = Objects.requireNonNull(name, JSON_NAME);
             if (value.isBlank() || !value.matches("[A-Za-z0-9_.:-]+")) {
                 throw new IllegalArgumentException("Invalid schema definition name: " + name);
             }
@@ -275,9 +279,9 @@ public class CodecJsonSchemaImpl {
         public JsonElement resolve(JsonElement schema) {
             Set<String> visited = new LinkedHashSet<>();
             JsonElement current = schema;
-            while (current != null && current.isJsonObject() && current.getAsJsonObject().has(DatapackEditorConstants.SCHEMA_REF)) {
-                String reference = current.getAsJsonObject().get(DatapackEditorConstants.SCHEMA_REF).getAsString();
-                String prefix = DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX;
+            while (current != null && current.isJsonObject() && current.getAsJsonObject().has(SCHEMA_REF)) {
+                String reference = current.getAsJsonObject().get(SCHEMA_REF).getAsString();
+                String prefix = SCHEMA_DEFINITIONS_PREFIX;
                 if (!visited.add(reference)) break;
                 if (!reference.startsWith(prefix)) {
                     JsonElement shared = sharedRegistries == null ? null : sharedRegistries.resolve(reference);
@@ -298,15 +302,16 @@ public class CodecJsonSchemaImpl {
                 if (inspected != null) return inspected.deepCopy();
             }
             if (codec == BlockState.CODEC) return BlockStateSchema.create(new SchemaContext(this));
+            if (codec == BlockState.FULL_CODEC) return BlockStateSchema.full(new SchemaContext(this));
             if (codec == DebugStickState.CODEC) return BlockStateSchema.debugStick(new SchemaContext(this));
-            if (codec == Codec.BOOL) return type(DatapackEditorConstants.SCHEMA_BOOLEAN);
+            if (codec == Codec.BOOL) return type(SCHEMA_BOOLEAN);
             if (codec == Codec.BYTE || codec == Codec.SHORT || codec == Codec.INT || codec == Codec.LONG) {
-                return type(DatapackEditorConstants.SCHEMA_INTEGER);
+                return type(SCHEMA_INTEGER);
             }
-            if (codec == Codec.FLOAT || codec == Codec.DOUBLE) return type(DatapackEditorConstants.SCHEMA_NUMBER);
-            if (codec == Codec.STRING) return type(DatapackEditorConstants.SCHEMA_STRING);
+            if (codec == Codec.FLOAT || codec == Codec.DOUBLE) return type(SCHEMA_NUMBER);
+            if (codec == Codec.STRING) return type(SCHEMA_STRING);
             if (codec == Codec.BYTE_BUFFER || codec == Codec.INT_STREAM || codec == Codec.LONG_STREAM) {
-                return array(type(DatapackEditorConstants.SCHEMA_INTEGER), null, null);
+                return array(type(SCHEMA_INTEGER), null, null);
             }
             if (codec == Codec.PASSTHROUGH) return new JsonObject();
             if (isOptionalValueDispatch(codec)) return inferOptionalValueDispatch(codec);
@@ -337,14 +342,14 @@ public class CodecJsonSchemaImpl {
                     return inferDispatchedMap(map);
                 }
                 case PairCodec<?, ?> pair -> {
-                    return tuple(List.of(infer(readField(pair, "first")), infer(readField(pair, "second"))));
+                    return tuple(List.of(infer(readField(pair, CODEC_FIRST)), infer(readField(pair, CODEC_SECOND))));
                 }
                 case CompoundListCodec<?, ?> compound -> {
-                    return mapSchema(infer(readField(compound, DatapackEditorConstants.CODEC_KEY_CODEC)), infer(readField(compound, DatapackEditorConstants.CODEC_ELEMENT_CODEC)));
+                    return mapSchema(infer(readField(compound, CODEC_KEY_CODEC)), infer(readField(compound, CODEC_ELEMENT_CODEC)));
                 }
                 case HolderSetCodec<?> holderSet -> {
                     ResourceKey<? extends Registry<?>> key = registryKeyFrom(holderSet);
-                    if (key != null) return holderSetSchema(key);
+                    if (key != null) return holderSetSchema(holderSet, key);
                 }
                 case RegistryFixedCodec<?> fixed -> {
                     ResourceKey<? extends Registry<?>> key = registryKeyFrom(fixed);
@@ -352,8 +357,8 @@ public class CodecJsonSchemaImpl {
                 }
                 case RegistryFileCodec<?> file -> {
                     ResourceKey<? extends Registry<?>> key = registryKeyFrom(file);
-                    JsonElement reference = key == null ? type(DatapackEditorConstants.SCHEMA_STRING) : registryReference(key, false);
-                    Object inline = readField(file, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
+                    JsonElement reference = key == null ? type(SCHEMA_STRING) : registryReference(key, false);
+                    Object inline = readField(file, CODEC_ELEMENT_CODEC);
                     boolean allowInline = Boolean.TRUE.equals(readField(file, "allowInline"));
                     return allowInline && inline != null ? alternatives(List.of(reference, infer(inline))) : reference;
                 }
@@ -381,7 +386,7 @@ public class CodecJsonSchemaImpl {
             if (!enumValues.isEmpty()) return stringEnum(enumValues);
 
             if (codec instanceof Codec.RecursiveCodec<?>) {
-                Object supplier = readField(codec, DatapackEditorConstants.CODEC_WRAPPED);
+                Object supplier = readField(codec, CODEC_WRAPPED);
                 if (supplier instanceof Supplier<?> wrapped) {
                     return infer(safeGet(wrapped));
                 }
@@ -427,7 +432,7 @@ public class CodecJsonSchemaImpl {
             if (codec instanceof SimpleMapCodec<?, ?> map) return inferSimpleMap(map);
             List<RecordField> fields = collectRecordFields(codec);
             if (!fields.isEmpty()) return recordSchema(fields);
-            Object wrapped = readField(codec, DatapackEditorConstants.CODEC_WRAPPED);
+            Object wrapped = readField(codec, CODEC_WRAPPED);
             if (wrapped instanceof Supplier<?> supplier) {
                 Object value = safeGet(supplier);
                 if (value != null && value != codec) return infer(value);
@@ -447,7 +452,7 @@ public class CodecJsonSchemaImpl {
             if (!className.startsWith("net.minecraft.util.ExtraCodecs$")) return false;
             try {
                 Set<String> keys = codec instanceof MapCodec<?> mapCodec ? mapCodec.keys(JsonOps.INSTANCE).flatMap(key -> JsonOps.INSTANCE.getStringValue(key).result().stream()).collect(Collectors.toSet()) : Set.of();
-                return keys.size() == 2 && keys.contains(readField(codec, DatapackEditorConstants.CODEC_TYPE_KEY)) && keys.contains(readField(codec, DatapackEditorConstants.CODEC_VALUE_KEY));
+                return keys.size() == 2 && keys.contains(readField(codec, CODEC_TYPE_KEY)) && keys.contains(readField(codec, CODEC_VALUE_KEY));
             } catch (RuntimeException ignored) {
                 if (ignored instanceof CancellationException) throw ignored;
                 return false;
@@ -456,8 +461,8 @@ public class CodecJsonSchemaImpl {
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         private JsonElement inferOptionalValueDispatch(Object dispatch) {
-            String typeKey = (String) readField(dispatch, DatapackEditorConstants.CODEC_TYPE_KEY);
-            String valueKey = (String) readField(dispatch, DatapackEditorConstants.CODEC_VALUE_KEY);
+            String typeKey = (String) readField(dispatch, CODEC_TYPE_KEY);
+            String valueKey = (String) readField(dispatch, CODEC_VALUE_KEY);
             Codec typeCodec = (Codec) readField(dispatch, "val$typeCodec");
             Function valueCodec = (Function) readField(dispatch, "val$valueCodec");
             if (typeKey == null || valueKey == null || typeCodec == null || valueCodec == null) {
@@ -479,15 +484,15 @@ public class CodecJsonSchemaImpl {
             JsonObject root = objectSchema();
             JsonObject rootProperties = new JsonObject();
             rootProperties.add(typeKey, typeSchema);
-            root.add(DatapackEditorConstants.JSON_PROPERTIES, rootProperties);
-            root.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(List.of(typeKey)));
+            root.add(JSON_PROPERTIES, rootProperties);
+            root.add(SCHEMA_REQUIRED, strings(List.of(typeKey)));
 
             JsonArray variants = new JsonArray();
             for (String value : values) {
                 checkpoint();
                 JsonObject variant = objectSchema();
                 JsonObject properties = new JsonObject();
-                properties.add(typeKey, object(DatapackEditorConstants.SCHEMA_CONST, value));
+                properties.add(typeKey, object(SCHEMA_CONST, value));
 
                 Optional<?> decodedType = typeCodec.parse(ops, new JsonPrimitive(value)).result();
                 if (decodedType.isPresent()) {
@@ -500,18 +505,18 @@ public class CodecJsonSchemaImpl {
                     }
                 }
 
-                variant.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-                variant.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(List.of(typeKey)));
-                variant.addProperty(DatapackEditorConstants.JSON_TITLE, value);
+                variant.add(JSON_PROPERTIES, properties);
+                variant.add(SCHEMA_REQUIRED, strings(List.of(typeKey)));
+                variant.addProperty(JSON_TITLE, value);
                 variants.add(variant);
             }
-            root.add(DatapackEditorConstants.SCHEMA_ONE_OF, variants);
+            root.add(SCHEMA_ONE_OF, variants);
             return root;
         }
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         private JsonElement inferDispatch(KeyDispatchCodec<?, ?> dispatch) {
-            MapCodec keyCodec = (MapCodec) readField(dispatch, DatapackEditorConstants.CODEC_KEY_CODEC);
+            MapCodec keyCodec = (MapCodec) readField(dispatch, CODEC_KEY_CODEC);
             Function decoder = (Function) readField(dispatch, "decoder");
             if (keyCodec == null || decoder == null) {
                 return unknown(dispatch);
@@ -529,8 +534,8 @@ public class CodecJsonSchemaImpl {
             JsonObject root = objectSchema();
             JsonObject rootProperties = new JsonObject();
             rootProperties.add(discriminator.name(), stringEnum(values));
-            root.add(DatapackEditorConstants.JSON_PROPERTIES, rootProperties);
-            root.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(List.of(discriminator.name())));
+            root.add(JSON_PROPERTIES, rootProperties);
+            root.add(SCHEMA_REQUIRED, strings(List.of(discriminator.name())));
 
             JsonArray variants = new JsonArray();
             for (String value : values) {
@@ -555,17 +560,17 @@ public class CodecJsonSchemaImpl {
                 JsonElement body = variantDecoder == null ? new JsonObject() : inferMapDecoder(variantDecoder);
                 JsonElement resolved = resolve(body);
                 JsonObject variant;
-                if (resolved.isJsonObject() && resolved.getAsJsonObject().has(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES)
-                        && resolved.getAsJsonObject().get(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES).equals(new JsonPrimitive(false))) {
+                if (resolved.isJsonObject() && resolved.getAsJsonObject().has(SCHEMA_ADDITIONAL_PROPERTIES)
+                        && resolved.getAsJsonObject().get(SCHEMA_ADDITIONAL_PROPERTIES).equals(new JsonPrimitive(false))) {
                     variant = resolved.getAsJsonObject().deepCopy();
                     addDiscriminator(variant, discriminator.name(), value);
                 } else {
-                    variant = object(DatapackEditorConstants.SCHEMA_ALL_OF, arrayOf(body, constraint));
+                    variant = object(SCHEMA_ALL_OF, arrayOf(body, constraint));
                 }
-                variant.addProperty(DatapackEditorConstants.JSON_TITLE, value);
+                variant.addProperty(JSON_TITLE, value);
                 variants.add(variant);
             }
-            root.add(DatapackEditorConstants.SCHEMA_ONE_OF, variants);
+            root.add(SCHEMA_ONE_OF, variants);
             return root;
         }
 
@@ -583,8 +588,8 @@ public class CodecJsonSchemaImpl {
             JsonElement valueSchema = infer(map.elementCodec());
             // valueSchema is a small first-use reference; never copy the value body.
             keys.forEach(key -> { checkpoint(); properties.add(key, valueSchema.deepCopy()); });
-            schema.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-            schema.addProperty(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, false);
+            schema.add(JSON_PROPERTIES, properties);
+            schema.addProperty(SCHEMA_ADDITIONAL_PROPERTIES, false);
             return schema;
         }
 
@@ -607,8 +612,8 @@ public class CodecJsonSchemaImpl {
                     properties.add(key, new JsonObject());
                 }
             }
-            schema.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-            schema.addProperty(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, true);
+            schema.add(JSON_PROPERTIES, properties);
+            schema.addProperty(SCHEMA_ADDITIONAL_PROPERTIES, true);
             return schema;
         }
 
@@ -624,8 +629,8 @@ public class CodecJsonSchemaImpl {
                 properties.add(field.name(), infer(field.codec()));
                 if (!field.optional()) required.add(field.name());
             });
-            schema.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-            if (!required.isEmpty()) schema.add(DatapackEditorConstants.SCHEMA_REQUIRED, required);
+            schema.add(JSON_PROPERTIES, properties);
+            if (!required.isEmpty()) schema.add(SCHEMA_REQUIRED, required);
             return schema;
         }
 
@@ -637,18 +642,18 @@ public class CodecJsonSchemaImpl {
 
         private void collectRecordFields(Object node, List<RecordField> result, Set<Object> seen, int depth) {
             checkpoint();
-            if (node == null || depth > DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return;
+            if (node == null || depth > CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return;
             switch (node) {
                 case OptionalFieldCodec<?> _ -> {
-                    Object name = readField(node, DatapackEditorConstants.JSON_NAME);
-                    Object element = readField(node, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
+                    Object name = readField(node, JSON_NAME);
+                    Object element = readField(node, CODEC_ELEMENT_CODEC);
                     if (name instanceof String string && element != null)
                         result.add(new RecordField(string, element, true));
                     return;
                 }
                 case FieldDecoder<?> _ -> {
-                    Object name = readField(node, DatapackEditorConstants.JSON_NAME);
-                    Object element = readField(node, DatapackEditorConstants.CODEC_ELEMENT_CODEC);
+                    Object name = readField(node, JSON_NAME);
+                    Object element = readField(node, CODEC_ELEMENT_CODEC);
                     if (name instanceof String string && element != null)
                         result.add(new RecordField(string, element, false));
                     return;
@@ -696,7 +701,7 @@ public class CodecJsonSchemaImpl {
             while (!pending.isEmpty() && visited++ < 256) {
                 Object candidate = pending.removeFirst();
                 if (!seen.add(candidate)) continue;
-                if (candidate == BlockState.CODEC || candidate == DebugStickState.CODEC || hasCustomization(candidate)
+                if (candidate == BlockState.CODEC || candidate == BlockState.FULL_CODEC || candidate == DebugStickState.CODEC || hasCustomization(candidate)
                         || candidate instanceof ListCodec<?> || candidate instanceof EitherCodec<?, ?> || candidate instanceof XorCodec<?, ?> || candidate instanceof UnboundedMapCodec<?, ?> || candidate instanceof SimpleMapCodec<?, ?> || candidate instanceof DispatchedMapCodec<?, ?> || candidate instanceof PairCodec<?, ?> || candidate instanceof CompoundListCodec<?, ?> || candidate instanceof KeyDispatchCodec<?, ?> || candidate instanceof MapCodec.MapCodecCodec<?> || isMinecraftStructuralCodec(candidate)) {
                     return candidate;
                 }
@@ -713,10 +718,7 @@ public class CodecJsonSchemaImpl {
         }
 
         private static boolean isMinecraftStructuralCodec(Object codec) {
-            String name = codec.getClass().getName();
-            return name.equals("net.minecraft.resources.HolderSetCodec") ||
-                    name.equals("net.minecraft.resources.RegistryFixedCodec") ||
-                    name.equals("net.minecraft.resources.RegistryFileCodec");
+            return codec instanceof HolderSetCodec<?> || codec instanceof RegistryFixedCodec<?> || codec instanceof RegistryFileCodec<?>;
         }
 
         private List<Object> reflectionChildren(Object node, boolean includeCodecs) {
@@ -741,7 +743,7 @@ public class CodecJsonSchemaImpl {
 
         private Registry<?> findCaptured(Object node, Set<Object> seen, int depth) {
             checkpoint();
-            if (node == null || depth > DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return null;
+            if (node == null || depth > CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return null;
             if (node instanceof Registry<?> registry) return registry;
             if (!isInspectable(node)) return null;
             for (Field field : fieldsOf(node.getClass())) {
@@ -761,7 +763,7 @@ public class CodecJsonSchemaImpl {
 
         private ResourceKey<? extends Registry<?>> findRegistryKey(Object node, Set<Object> seen, int depth) {
             checkpoint();
-            if (node == null || depth > DatapackEditorConstants.CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return null;
+            if (node == null || depth > CODEC_REFLECTION_MAX_DEPTH || !seen.add(node)) return null;
             if (node instanceof ResourceKey<?> key && isRegistryKey(key)) return castRegistryKey(key);
             if (!isInspectable(node)) return null;
             for (Field field : fieldsOf(node.getClass())) {
@@ -806,16 +808,22 @@ public class CodecJsonSchemaImpl {
         }
 
         private ResourceKey<? extends Registry<?>> registryKeyFrom(Object codec) {
-            Object key = readField(codec, DatapackEditorConstants.CODEC_REGISTRY_KEY);
+            Object key = readField(codec, CODEC_REGISTRY_KEY);
             return key instanceof ResourceKey<?> resourceKey && isRegistryKey(resourceKey) ? castRegistryKey(resourceKey) : null;
         }
 
-        private JsonElement holderSetSchema(ResourceKey<? extends Registry<?>> key) {
+        private JsonElement holderSetSchema(HolderSetCodec<?> codec, ResourceKey<? extends Registry<?>> key) {
+            JsonObject tag = type(SCHEMA_STRING);
+            tag.addProperty(SCHEMA_PATTERN, MINECRAFT_TAG_ID_PATTERN);
+            List<String> tags = registryValues(key, true).stream()
+                    .filter(value -> value.startsWith(MINECRAFT_TAG_PREFIX)).toList();
+            if (!tags.isEmpty()) tag.add(SCHEMA_ENUM, stringEnum(tags).get(SCHEMA_ENUM));
+            Object taggedValues = readField(codec, CODEC_HOLDER_SET_VALUES);
+            Object values = readField(taggedValues, CODEC_SECOND);
             JsonArray alternatives = new JsonArray();
-            alternatives.add(registryReference(key, true));
-            alternatives.add(array(registryReference(key, false), 1, null));
-            alternatives.add(object(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT, DatapackEditorConstants.JSON_DESCRIPTION, "Registered custom holder set"));
-            return object(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
+            alternatives.add(tag);
+            alternatives.add(infer(values));
+            return object(SCHEMA_ANY_OF, alternatives);
         }
 
         public JsonElement registryReference(ResourceKey<? extends Registry<?>> key, boolean includeTags) {
@@ -824,9 +832,9 @@ public class CodecJsonSchemaImpl {
             String definition = "registry_" + sanitize(key.identifier().toString()) + (includeTags ? "_or_tag" : "");
             if (!definitions.has(definition)) {
                 List<String> values = registryValues(key, includeTags);
-                definitions.add(definition, values.isEmpty() ? type(DatapackEditorConstants.SCHEMA_STRING) : stringEnum(values));
+                definitions.add(definition, values.isEmpty() ? type(SCHEMA_STRING) : stringEnum(values));
             }
-            return object(DatapackEditorConstants.SCHEMA_REF, DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX + definition);
+            return object(SCHEMA_REF, SCHEMA_DEFINITIONS_PREFIX + definition);
         }
 
         @SuppressWarnings({"rawtypes", "unchecked"})
@@ -835,22 +843,22 @@ public class CodecJsonSchemaImpl {
             if (lookup.isEmpty()) return List.of();
             Set<String> values = new LinkedHashSet<>();
             lookup.get().listElementIds().map(ResourceKey::identifier).map(Identifier::toString).forEach(values::add);
-            if (includeTags) lookup.get().listTagIds().map(tag -> DatapackEditorConstants.MINECRAFT_TAG_PREFIX + tag.location()).forEach(values::add);
+            if (includeTags) lookup.get().listTagIds().map(tag -> MINECRAFT_TAG_PREFIX + tag.location()).forEach(values::add);
             return values.stream().sorted().toList();
         }
 
         private JsonObject mapSchema(JsonElement key, JsonElement value) {
             JsonObject schema = objectSchema();
-            schema.add(DatapackEditorConstants.SCHEMA_PROPERTY_NAMES, key);
-            schema.add(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, value);
+            schema.add(SCHEMA_PROPERTY_NAMES, key);
+            schema.add(SCHEMA_ADDITIONAL_PROPERTIES, value);
             return schema;
         }
 
         private JsonObject tuple(List<JsonElement> entries) {
-            JsonObject schema = object(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_ARRAY, DatapackEditorConstants.SCHEMA_MIN_ITEMS, entries.size(), DatapackEditorConstants.SCHEMA_MAX_ITEMS, entries.size());
+            JsonObject schema = object(JSON_TYPE, SCHEMA_ARRAY, SCHEMA_MIN_ITEMS, entries.size(), SCHEMA_MAX_ITEMS, entries.size());
             JsonArray items = new JsonArray();
             entries.forEach(items::add);
-            schema.add(DatapackEditorConstants.SCHEMA_ITEMS, items);
+            schema.add(SCHEMA_ITEMS, items);
             return schema;
         }
 
@@ -861,28 +869,28 @@ public class CodecJsonSchemaImpl {
         }
 
         private void addDiscriminator(JsonObject schema, String field, String value) {
-            schema.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT);
-            JsonObject properties = schema.has(DatapackEditorConstants.JSON_PROPERTIES) && schema.get(DatapackEditorConstants.JSON_PROPERTIES).isJsonObject() ? schema.getAsJsonObject(DatapackEditorConstants.JSON_PROPERTIES) : new JsonObject();
-            properties.add(field, object(DatapackEditorConstants.SCHEMA_CONST, value));
-            schema.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
+            schema.addProperty(JSON_TYPE, SCHEMA_OBJECT);
+            JsonObject properties = schema.has(JSON_PROPERTIES) && schema.get(JSON_PROPERTIES).isJsonObject() ? schema.getAsJsonObject(JSON_PROPERTIES) : new JsonObject();
+            properties.add(field, object(SCHEMA_CONST, value));
+            schema.add(JSON_PROPERTIES, properties);
             Set<String> required = new LinkedHashSet<>();
-            if (schema.has(DatapackEditorConstants.SCHEMA_REQUIRED) && schema.get(DatapackEditorConstants.SCHEMA_REQUIRED).isJsonArray()) {
-                schema.getAsJsonArray(DatapackEditorConstants.SCHEMA_REQUIRED).forEach(element -> required.add(element.getAsString()));
+            if (schema.has(SCHEMA_REQUIRED) && schema.get(SCHEMA_REQUIRED).isJsonArray()) {
+                schema.getAsJsonArray(SCHEMA_REQUIRED).forEach(element -> required.add(element.getAsString()));
             }
             required.add(field);
-            schema.add(DatapackEditorConstants.SCHEMA_REQUIRED, strings(required));
+            schema.add(SCHEMA_REQUIRED, strings(required));
         }
 
         private List<String> enumValues(JsonElement schema) {
             schema = resolve(schema);
             if (schema == null || !schema.isJsonObject()) return List.of();
             JsonObject object = schema.getAsJsonObject();
-            if (object.has(DatapackEditorConstants.SCHEMA_ENUM) && object.get(DatapackEditorConstants.SCHEMA_ENUM).isJsonArray()) {
-                return object.getAsJsonArray(DatapackEditorConstants.SCHEMA_ENUM).asList().stream().map(JsonElement::getAsString).toList();
+            if (object.has(SCHEMA_ENUM) && object.get(SCHEMA_ENUM).isJsonArray()) {
+                return object.getAsJsonArray(SCHEMA_ENUM).asList().stream().map(JsonElement::getAsString).toList();
             }
-            if (object.has(DatapackEditorConstants.SCHEMA_REF)) {
-                String ref = object.get(DatapackEditorConstants.SCHEMA_REF).getAsString();
-                String prefix = DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX;
+            if (object.has(SCHEMA_REF)) {
+                String ref = object.get(SCHEMA_REF).getAsString();
+                String prefix = SCHEMA_DEFINITIONS_PREFIX;
                 if (ref.startsWith(prefix) && definitions.has(ref.substring(prefix.length()))) {
                     return enumValues(definitions.get(ref.substring(prefix.length())));
                 }
@@ -901,11 +909,11 @@ public class CodecJsonSchemaImpl {
         }
 
         public void checkpoint() {
-            if (Thread.currentThread().isInterrupted()) throw new CancellationException(DatapackEditorConstants.MESSAGE_SCHEMA_GENERATION_CANCELLED);
-            if (memoizedDefinitions.size() > DatapackEditorConstants.SCHEMA_MAX_DEFINITIONS)
-                throw new CancellationException("Schema generation exceeded its definition budget (" + memoizedDefinitions.size() + "/" + DatapackEditorConstants.SCHEMA_MAX_DEFINITIONS + ")");
+            if (Thread.currentThread().isInterrupted()) throw new CancellationException(MESSAGE_SCHEMA_GENERATION_CANCELLED);
+            if (memoizedDefinitions.size() > SCHEMA_MAX_DEFINITIONS)
+                throw new CancellationException("Schema generation exceeded its definition budget (" + memoizedDefinitions.size() + "/" + SCHEMA_MAX_DEFINITIONS + ")");
             long elapsed = System.nanoTime() - started;
-            if (elapsed > TimeUnit.SECONDS.toNanos(DatapackEditorConstants.WORK_TIMEOUT_SECONDS))
+            if (elapsed > TimeUnit.SECONDS.toNanos(WORK_TIMEOUT_SECONDS))
                 throw new CancellationException("Schema generation exceeded its time budget (" + TimeUnit.NANOSECONDS.toMillis(elapsed)
                         + " ms, " + memoizedDefinitions.size() + " codec definitions)");
         }
@@ -915,7 +923,7 @@ public class CodecJsonSchemaImpl {
             if (unique.size() == 1) return asObject(unique.getFirst());
             JsonArray alternatives = new JsonArray();
             unique.forEach(alternatives::add);
-            return object(DatapackEditorConstants.SCHEMA_ANY_OF, alternatives);
+            return object(SCHEMA_ANY_OF, alternatives);
         }
 
         private static JsonObject unknown(Object codec) {
@@ -925,24 +933,24 @@ public class CodecJsonSchemaImpl {
         }
 
         private static JsonObject type(String type) {
-            return object(DatapackEditorConstants.JSON_TYPE, type);
+            return object(JSON_TYPE, type);
         }
 
         private static JsonObject objectSchema() {
-            return type(DatapackEditorConstants.SCHEMA_OBJECT);
+            return type(SCHEMA_OBJECT);
         }
 
         private static JsonObject stringEnum(Collection<String> values) {
-            JsonObject schema = type(DatapackEditorConstants.SCHEMA_STRING);
-            schema.add(DatapackEditorConstants.SCHEMA_ENUM, strings(values));
+            JsonObject schema = type(SCHEMA_STRING);
+            schema.add(SCHEMA_ENUM, strings(values));
             return schema;
         }
 
         private static JsonObject array(JsonElement items, Integer minimum, Integer maximum) {
-            JsonObject schema = type(DatapackEditorConstants.SCHEMA_ARRAY);
-            schema.add(DatapackEditorConstants.SCHEMA_ITEMS, items);
-            if (minimum != null) schema.addProperty(DatapackEditorConstants.SCHEMA_MIN_ITEMS, minimum);
-            if (maximum != null) schema.addProperty(DatapackEditorConstants.SCHEMA_MAX_ITEMS, maximum);
+            JsonObject schema = type(SCHEMA_ARRAY);
+            schema.add(SCHEMA_ITEMS, items);
+            if (minimum != null) schema.addProperty(SCHEMA_MIN_ITEMS, minimum);
+            if (maximum != null) schema.addProperty(SCHEMA_MAX_ITEMS, maximum);
             return schema;
         }
 
@@ -981,10 +989,10 @@ public class CodecJsonSchemaImpl {
             schema = resolve(schema);
             if (schema == null || !schema.isJsonObject()) return false;
             JsonObject object = schema.getAsJsonObject();
-            if (object.has(DatapackEditorConstants.JSON_TYPE) && DatapackEditorConstants.SCHEMA_STRING.equals(object.get(DatapackEditorConstants.JSON_TYPE).getAsString())) return true;
-            if (!object.has(DatapackEditorConstants.SCHEMA_REF)) return false;
-            String reference = object.get(DatapackEditorConstants.SCHEMA_REF).getAsString();
-            String prefix = DatapackEditorConstants.SCHEMA_DEFINITIONS_PREFIX;
+            if (object.has(JSON_TYPE) && SCHEMA_STRING.equals(object.get(JSON_TYPE).getAsString())) return true;
+            if (!object.has(SCHEMA_REF)) return false;
+            String reference = object.get(SCHEMA_REF).getAsString();
+            String prefix = SCHEMA_DEFINITIONS_PREFIX;
             if (!reference.startsWith(prefix) || !visitedReferences.add(reference)) return false;
             String definition = reference.substring(prefix.length());
             return definitions.has(definition) && isStringSchema(definitions.get(definition), visitedReferences);

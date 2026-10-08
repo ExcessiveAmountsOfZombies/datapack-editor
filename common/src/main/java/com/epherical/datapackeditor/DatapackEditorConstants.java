@@ -114,6 +114,8 @@ public class DatapackEditorConstants {
     public static final String PATH_ZIP_EXTENSION = ".zip";
 
     public static final String CODEC_ELEMENT_CODEC = "elementCodec";
+    public static final String CODEC_FIRST = "first";
+    public static final String CODEC_SECOND = "second";
     public static final String CODEC_KEY_CODEC = "keyCodec";
     public static final String CODEC_TYPE_KEY = "val$typeKey";
     public static final String CODEC_VALUE_KEY = "val$valueKey";
@@ -123,9 +125,9 @@ public class DatapackEditorConstants {
     public static final String EDITOR_LOADED_DATAPACKS = "Loaded Datapacks";
     public static final String EDITOR_NAME = "datapack-editor";
 
-    public static final String MINECRAFT_BLOCK_STATE_NAME = "Name";
-    public static final String MINECRAFT_BLOCK_STATE_PROPERTIES = "Properties";
     public static final String MINECRAFT_TAG_PREFIX = "#";
+    public static final String MINECRAFT_TAG_ID_PATTERN = "^#(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$";
+    public static final String CODEC_HOLDER_SET_VALUES = "tagKeyOrValuesCodec";
 
     public static final String JSON_ADAPTER = "adapter";
     public static final String JSON_ADVANCEMENT = "advancement";
@@ -134,7 +136,6 @@ public class DatapackEditorConstants {
     public static final String JSON_BLOCK = "block";
     public static final String JSON_CODEC = "codec";
     public static final String JSON_COMPONENTS = "components";
-    public static final String JSON_CONFIGURED_FEATURE = "configured_feature";
     public static final String JSON_CONTENT = "content";
     public static final String JSON_COUNT = "count";
     public static final String JSON_CREATED = "created";
@@ -151,6 +152,7 @@ public class DatapackEditorConstants {
     public static final String JSON_ERROR = "error";
     public static final String JSON_EXTRA = "extra";
     public static final String JSON_FEATURE = "feature";
+    public static final String JSON_FEATURES = "features";
     public static final String JSON_FILE_MATCH = "fileMatch";
     public static final String JSON_FILES = "files";
     public static final String JSON_GENERATION = "generation";

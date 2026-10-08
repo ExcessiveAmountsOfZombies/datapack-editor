@@ -16,20 +16,20 @@ export interface FeatureSettings {
 }
 
 export function featureResource(path: string | undefined): {kind: string; id: string} | undefined {
-    const match = path?.replaceAll("\\", "/").match(/(?:^|\/)data\/([^/]+)\/worldgen\/(configured_feature|placed_feature)\/(.+)\.json$/);
+    const match = path?.replaceAll("\\", "/").match(/(?:^|\/)data\/([^/]+)\/worldgen\/(feature|placed_feature)\/(.+)\.json$/);
     return match ? {kind: match[2], id: `${match[1]}:${match[3]}`} : undefined;
 }
 
 export function isConfiguredFeaturePath(path: string | undefined): boolean {
-    return featureResource(path)?.kind === "configured_feature";
+    return featureResource(path)?.kind === "feature";
 }
 
 export function configuredFeatureError(content: string): string | undefined {
     try {
         const value = JSON.parse(content);
         if (!value || typeof value !== "object" || Array.isArray(value)
-            || typeof value.type !== "string" || !value.config || typeof value.config !== "object" || Array.isArray(value.config)) {
-            return "Expected a configured feature with a type and config.";
+            || typeof value.type !== "string") {
+            return "Expected a feature object with a type.";
         }
     } catch {
         return "Fix the JSON to generate this feature.";

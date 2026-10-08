@@ -19,8 +19,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.storage.loot.LootDataType;
-import net.minecraft.world.level.storage.loot.Validatable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,6 +27,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
+import static com.epherical.datapackeditor.DatapackEditorConstants.*;
 
 public class DataPackRegistrationImpl {
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
@@ -85,17 +85,19 @@ public class DataPackRegistrationImpl {
 
     public static JsonObject buildResponse(RegistryAccess registries, String selected) {
         Map<String, JsonObject> registrations = new LinkedHashMap<>();
-        if (selected == null || selected.equals(DatapackEditorConstants.JSON_ADVANCEMENT)) registrations.put(DatapackEditorConstants.JSON_ADVANCEMENT, advancementRegistration(registries));
-        if (selected == null || selected.equals(DatapackEditorConstants.JSON_RECIPE)) {
-            registrations.put(DatapackEditorConstants.JSON_RECIPE,
-                    registration(DatapackEditorConstants.JSON_RECIPE, RecipeSchemaBuilder.buildSchema(registries), false));
+        if (selected == null || selected.equals(JSON_ADVANCEMENT)) registrations.put(JSON_ADVANCEMENT, advancementRegistration(registries));
+        if (selected == null || selected.equals(JSON_RECIPE)) {
+            registrations.put(JSON_RECIPE,
+                    registration(JSON_RECIPE, RecipeSchemaBuilder.buildSchema(registries), false));
         }
         datapackRegistries().stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
                 .forEach(data -> addRegistry(registrations, registries, data));
         RegistryDataLoader.DIMENSION_REGISTRIES.stream().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
                 .forEach(data -> addRegistry(registrations, registries, data));
-        LootDataType.values().filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.registryKey())))
-                .forEach(data -> addLootRegistry(registrations, registries, data));
+        reloadableDatapackRegistries().stream()
+                .filter(data -> !data.key().equals(Registries.ADVANCEMENT) && !data.key().equals(Registries.RECIPE))
+                .filter(data -> selected == null || selected.equals(Registries.elementsDirPath(data.key())))
+                .forEach(data -> addRegistry(registrations, registries, data));
         registeredSchemas().forEach((id, registered) -> {
             if (selected == null || selected.equals(id)) applyRegisteredSchema(registrations, registries, id, registered);
         });
@@ -106,38 +108,40 @@ public class DataPackRegistrationImpl {
                 .map(Map.Entry::getValue)
                 .forEach(schemas::add);
         JsonObject response = new JsonObject();
-        response.add(DatapackEditorConstants.JSON_SCHEMAS, schemas);
+        response.add(JSON_SCHEMAS, schemas);
         return response;
     }
 
     public static Map<String, JsonObject> catalog() {
         Map<String, JsonObject> result = new LinkedHashMap<>();
-        result.put(DatapackEditorConstants.JSON_ADVANCEMENT, registration(DatapackEditorConstants.JSON_ADVANCEMENT, null, true));
-        result.put(DatapackEditorConstants.JSON_RECIPE, registration(DatapackEditorConstants.JSON_RECIPE, null, false));
+        result.put(JSON_ADVANCEMENT, registration(JSON_ADVANCEMENT, null, true));
+        result.put(JSON_RECIPE, registration(JSON_RECIPE, null, false));
         datapackRegistries().forEach(data -> result.put(Registries.elementsDirPath(data.key()),
                 registration(Registries.elementsDirPath(data.key()), null, false)));
         RegistryDataLoader.DIMENSION_REGISTRIES.forEach(data -> result.put(Registries.elementsDirPath(data.key()),
                 registration(Registries.elementsDirPath(data.key()), null, false)));
-        LootDataType.values().forEach(data -> result.put(Registries.elementsDirPath(data.registryKey()),
-                registration(Registries.elementsDirPath(data.registryKey()), null, false)));
+        reloadableDatapackRegistries().stream()
+                .filter(data -> !data.key().equals(Registries.ADVANCEMENT) && !data.key().equals(Registries.RECIPE))
+                .forEach(data -> result.put(Registries.elementsDirPath(data.key()),
+                        registration(Registries.elementsDirPath(data.key()), null, false)));
         registeredSchemas().values().forEach(values -> values.forEach(value -> catalogRegistration(result, value)));
         return result;
     }
 
     private static void catalogRegistration(Map<String, JsonObject> result, DataPackRegistration value) {
-        JsonObject entry = result.computeIfAbsent(value.id(), id -> registration(id, null, id.equals(DatapackEditorConstants.JSON_ADVANCEMENT)));
+        JsonObject entry = result.computeIfAbsent(value.id(), id -> registration(id, null, id.equals(JSON_ADVANCEMENT)));
         if (!value.fileMatches().isEmpty()) {
             JsonArray matches = new JsonArray();
             value.fileMatches().forEach(matches::add);
-            entry.add(DatapackEditorConstants.JSON_FILE_MATCH, matches);
+            entry.add(JSON_FILE_MATCH, matches);
         }
     }
 
     private static JsonObject advancementRegistration(RegistryAccess registries) {
         JsonObject schema = CodecJsonSchemaImpl.create(Advancement.CODEC, registries);
-        schema.addProperty(DatapackEditorConstants.JSON_TITLE, "Minecraft advancement");
-        schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, "Generated from Advancement.CODEC and the running game's registries.");
-        return registration(DatapackEditorConstants.JSON_ADVANCEMENT, schema, true);
+        schema.addProperty(JSON_TITLE, "Minecraft advancement");
+        schema.addProperty(JSON_DESCRIPTION, "Generated from Advancement.CODEC and the running game's registries.");
+        return registration(JSON_ADVANCEMENT, schema, true);
     }
 
     private static <T> void addRegistry(Map<String, JsonObject> registrations,
@@ -146,16 +150,6 @@ public class DataPackRegistrationImpl {
         ResourceKey<? extends Registry<T>> key = data.key();
         String directory = Registries.elementsDirPath(key);
         JsonObject schema = schema(registries, data.elementCodec(), key);
-        registrations.put(directory, registration(directory, schema, false));
-    }
-
-    private static <T extends Validatable> void addLootRegistry(
-            Map<String, JsonObject> registrations,
-            RegistryAccess registries,
-            LootDataType<T> data) {
-        ResourceKey<? extends Registry<T>> key = data.registryKey();
-        String directory = Registries.elementsDirPath(key);
-        JsonObject schema = schema(registries, data.codec(), key);
         registrations.put(directory, registration(directory, schema, false));
     }
 
@@ -168,8 +162,8 @@ public class DataPackRegistrationImpl {
             builder.register(CompoundTag.CODEC, trialSpawnerEntityTagSchema(registries));
         }
         JsonObject schema = CodecJsonSchemaImpl.create(builder, codec);
-        schema.addProperty(DatapackEditorConstants.JSON_TITLE, key.identifier() + " datapack entry");
-        schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, DatapackEditorConstants.MESSAGE_REGISTRY_DESCRIPTION);
+        schema.addProperty(JSON_TITLE, key.identifier() + " datapack entry");
+        schema.addProperty(JSON_DESCRIPTION, MESSAGE_REGISTRY_DESCRIPTION);
         return schema;
     }
 
@@ -177,11 +171,11 @@ public class DataPackRegistrationImpl {
         JsonElement entityId = CodecJsonSchemaImpl.registrySchema(registries, Registries.ENTITY_TYPE, false);
 
         JsonObject properties = new JsonObject();
-        properties.add(DatapackEditorConstants.JSON_ID, entityId);
+        properties.add(JSON_ID, entityId);
         JsonObject entityTag = new JsonObject();
-        entityTag.addProperty(DatapackEditorConstants.JSON_TYPE, DatapackEditorConstants.SCHEMA_OBJECT);
-        entityTag.add(DatapackEditorConstants.JSON_PROPERTIES, properties);
-        entityTag.addProperty(DatapackEditorConstants.SCHEMA_ADDITIONAL_PROPERTIES, true);
+        entityTag.addProperty(JSON_TYPE, SCHEMA_OBJECT);
+        entityTag.add(JSON_PROPERTIES, properties);
+        entityTag.addProperty(SCHEMA_ADDITIONAL_PROPERTIES, true);
         return entityTag;
     }
 
@@ -209,25 +203,25 @@ public class DataPackRegistrationImpl {
         JsonObject schema;
         if (codec != null) {
             schema = CodecJsonSchemaImpl.create(schemaBuilder, codec);
-            schema.addProperty(DatapackEditorConstants.JSON_TITLE, existing == null
+            schema.addProperty(JSON_TITLE, existing == null
                     ? id + " datapack entry"
-                    : existing.getAsJsonObject(DatapackEditorConstants.JSON_SCHEMA).get(DatapackEditorConstants.JSON_TITLE).getAsString());
-            schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, existing == null
-                    ? DatapackEditorConstants.MESSAGE_REGISTRY_DESCRIPTION
-                    : existing.getAsJsonObject(DatapackEditorConstants.JSON_SCHEMA).get(DatapackEditorConstants.JSON_DESCRIPTION).getAsString());
+                    : existing.getAsJsonObject(JSON_SCHEMA).get(JSON_TITLE).getAsString());
+            schema.addProperty(JSON_DESCRIPTION, existing == null
+                    ? MESSAGE_REGISTRY_DESCRIPTION
+                    : existing.getAsJsonObject(JSON_SCHEMA).get(JSON_DESCRIPTION).getAsString());
         } else {
             if (existing == null) throw new IllegalArgumentException("No schema to enrich for datapack resource: " + id);
-            schema = CodecJsonSchemaImpl.enhance(schemaBuilder, existing.getAsJsonObject(DatapackEditorConstants.JSON_SCHEMA));
+            schema = CodecJsonSchemaImpl.enhance(schemaBuilder, existing.getAsJsonObject(JSON_SCHEMA));
         }
-        if (title != null) schema.addProperty(DatapackEditorConstants.JSON_TITLE, title);
-        if (description != null) schema.addProperty(DatapackEditorConstants.JSON_DESCRIPTION, description);
-        JsonObject result = registration(id, schema, id.equals(DatapackEditorConstants.JSON_ADVANCEMENT));
+        if (title != null) schema.addProperty(JSON_TITLE, title);
+        if (description != null) schema.addProperty(JSON_DESCRIPTION, description);
+        JsonObject result = registration(id, schema, id.equals(JSON_ADVANCEMENT));
         if (!fileMatches.isEmpty()) {
             JsonArray matches = new JsonArray();
             fileMatches.forEach(matches::add);
-            result.add(DatapackEditorConstants.JSON_FILE_MATCH, matches);
+            result.add(JSON_FILE_MATCH, matches);
         } else if (existing != null) {
-            result.add(DatapackEditorConstants.JSON_FILE_MATCH, existing.get(DatapackEditorConstants.JSON_FILE_MATCH).deepCopy());
+            result.add(JSON_FILE_MATCH, existing.get(JSON_FILE_MATCH).deepCopy());
         }
         registrations.put(id, result);
     }
@@ -238,29 +232,34 @@ public class DataPackRegistrationImpl {
         if (includeLegacyPlural) addFileMatches(fileMatch, directory + "s");
 
         JsonObject registration = new JsonObject();
-        registration.addProperty(DatapackEditorConstants.JSON_URI, "datapack-editor://schemas/datapack/" + directory.replace('/', '_') + DatapackEditorConstants.PATH_JSON_EXTENSION);
-        registration.add(DatapackEditorConstants.JSON_FILE_MATCH, fileMatch);
-        if (schema != null) registration.add(DatapackEditorConstants.JSON_SCHEMA, schema);
+        registration.addProperty(JSON_URI, "datapack-editor://schemas/datapack/" + directory.replace('/', '_') + PATH_JSON_EXTENSION);
+        registration.add(JSON_FILE_MATCH, fileMatch);
+        if (schema != null) registration.add(JSON_SCHEMA, schema);
         return registration;
     }
 
     private static void addFileMatches(JsonArray fileMatch, String directory) {
-        fileMatch.add(DatapackEditorConstants.PATH_DATA_FILE_GLOB_PREFIX + directory + DatapackEditorConstants.PATH_JSON_FILE_GLOB);
-        fileMatch.add(DatapackEditorConstants.PATH_DATA_FILE_GLOB_PREFIX + directory + DatapackEditorConstants.PATH_RECURSIVE_JSON_FILE_GLOB);
+        fileMatch.add(PATH_DATA_FILE_GLOB_PREFIX + directory + PATH_JSON_FILE_GLOB);
+        fileMatch.add(PATH_DATA_FILE_GLOB_PREFIX + directory + PATH_RECURSIVE_JSON_FILE_GLOB);
     }
 
     private static boolean isDefaultDirectory(String directory) {
-        if (directory.equals(DatapackEditorConstants.JSON_ADVANCEMENT) || directory.equals(DatapackEditorConstants.JSON_RECIPE)) return true;
+        if (directory.equals(JSON_ADVANCEMENT) || directory.equals(JSON_RECIPE)) return true;
         return datapackRegistries().stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
                 || RegistryDataLoader.DIMENSION_REGISTRIES.stream()
                 .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory))
-                || LootDataType.values()
-                .anyMatch(data -> Registries.elementsDirPath(data.registryKey()).equals(directory));
+                || reloadableDatapackRegistries().stream()
+                .anyMatch(data -> Registries.elementsDirPath(data.key()).equals(directory));
+    }
+
+    private static List<RegistryDataLoader.RegistryData<?>> reloadableDatapackRegistries() {
+        return CommonPlatform.platform == null ? RegistryDataLoader.RELOADABLE_REGISTRIES
+                : CommonPlatform.platform.reloadableDatapackRegistries();
     }
 
     private static List<RegistryDataLoader.RegistryData<?>> datapackRegistries() {
-        return CommonPlatform.platform == null ? RegistryDataLoader.WORLDGEN_REGISTRIES
+        return CommonPlatform.platform == null ? RegistryDataLoader.WORLD_REGISTRIES
                 : CommonPlatform.platform.datapackRegistries();
     }
 }
