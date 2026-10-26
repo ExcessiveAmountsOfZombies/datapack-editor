@@ -1,12 +1,12 @@
 package com.epherical.datapackeditor.editor.recipe;
 
 import com.epherical.datapackeditor.CommonPlatform;
+import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -30,8 +30,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
 
-import static com.epherical.datapackeditor.DatapackEditorConstants.*;
-
 public class EditorRecipePreview {
     private static final Map<Identifier, BiFunction<MinecraftServer, Recipe<?>, List<Display>>> ADAPTERS = new ConcurrentHashMap<>();
     private final MinecraftServer server;
@@ -47,20 +45,20 @@ public class EditorRecipePreview {
     public record Slot(String label, SlotDisplay display) {}
     public record Display(String title, List<Slot> slots) {}
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.post("/api/recipe-preview", context -> {
+    public void registerRoutes(HttpRoutes routes) {
+        routes.post("/api/recipe-preview", context -> {
             try {
                 JsonObject definition = JsonParser.parseString(context.body()).getAsJsonObject();
-                JsonObject result = CompletableFuture.supplyAsync(() -> resolve(definition), server).get(WORK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                context.header(HTTP_CACHE_CONTROL, HTTP_NO_STORE).contentType(HTTP_JSON).result(result.toString());
+                JsonObject result = CompletableFuture.supplyAsync(() -> resolve(definition), server).get(DatapackEditorConstants.WORK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE).contentType(DatapackEditorConstants.HTTP_JSON).result(result.toString());
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                context.status(HttpStatus.SERVICE_UNAVAILABLE);
+                context.status(DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE);
             } catch (JsonParseException | IllegalStateException | IllegalArgumentException | ExecutionException | TimeoutException exception) {
                 JsonObject error = new JsonObject();
                 Throwable cause = exception instanceof ExecutionException ? exception.getCause() : exception;
-                error.addProperty(JSON_ERROR, cause.getMessage());
-                context.status(HttpStatus.BAD_REQUEST).contentType(HTTP_JSON).result(error.toString());
+                error.addProperty(DatapackEditorConstants.JSON_ERROR, cause.getMessage());
+                context.status(DatapackEditorConstants.HTTP_BAD_REQUEST).contentType(DatapackEditorConstants.HTTP_JSON).result(error.toString());
             }
         });
     }
@@ -68,7 +66,7 @@ public class EditorRecipePreview {
     public JsonObject resolve(JsonObject definition) {
         JsonObject result = new JsonObject();
         boolean enabled = CommonPlatform.platform.previewConditionsMatch(server, definition);
-        result.addProperty(JSON_ENABLED, enabled);
+        result.addProperty(DatapackEditorConstants.JSON_ENABLED, enabled);
         if (!enabled) return result;
         Recipe<?> recipe = Recipe.DIRECT_CODEC.parse(CommonPlatform.platform.previewOps(server), definition).getOrThrow(JsonParseException::new);
         var adapter = ADAPTERS.get(BuiltInRegistries.RECIPE_SERIALIZER.getKey(recipe.getSerializer()));
@@ -78,20 +76,20 @@ public class EditorRecipePreview {
         JsonArray encodedDisplays = new JsonArray();
         displays.stream().limit(16).forEach(display -> {
             JsonObject encoded = new JsonObject();
-            encoded.addProperty(JSON_TITLE, display.title());
+            encoded.addProperty(DatapackEditorConstants.JSON_TITLE, display.title());
             JsonArray slots = new JsonArray();
-            display.slots().stream().limit(RECIPE_MAX_SLOTS).forEach(slot -> {
+            display.slots().stream().limit(DatapackEditorConstants.RECIPE_MAX_SLOTS).forEach(slot -> {
                 JsonObject encodedSlot = new JsonObject();
                 encodedSlot.addProperty("label", slot.label());
                 try {
-                    encodedSlot.add(SCHEMA_ITEMS, resolver.resolveDisplay(slot.display()));
+                    encodedSlot.add(DatapackEditorConstants.SCHEMA_ITEMS, resolver.resolveDisplay(slot.display()));
                 } catch (RuntimeException exception) {
-                    encodedSlot.add(SCHEMA_ITEMS, new JsonArray());
-                    encodedSlot.addProperty(JSON_ERROR, "Display unavailable: " + exception.getMessage());
+                    encodedSlot.add(DatapackEditorConstants.SCHEMA_ITEMS, new JsonArray());
+                    encodedSlot.addProperty(DatapackEditorConstants.JSON_ERROR, "Display unavailable: " + exception.getMessage());
                 }
                 slots.add(encodedSlot);
             });
-            encoded.add(JSON_SLOTS, slots);
+            encoded.add(DatapackEditorConstants.JSON_SLOTS, slots);
             encodedDisplays.add(encoded);
         });
         result.add("displays", encodedDisplays);
@@ -114,7 +112,7 @@ public class EditorRecipePreview {
             }
             case FurnaceRecipeDisplay furnace -> {
                 title = "Cooking · " + furnace.duration() + " ticks · " + furnace.experience() + " XP";
-                slots.add(new Slot(MESSAGE_INGREDIENT, furnace.ingredient()));
+                slots.add(new Slot(DatapackEditorConstants.MESSAGE_INGREDIENT, furnace.ingredient()));
                 slots.add(new Slot("Fuel", furnace.fuel()));
             }
             case SmithingRecipeDisplay smithing -> {
@@ -122,7 +120,7 @@ public class EditorRecipePreview {
                 slots.add(new Slot("Base", smithing.base()));
                 slots.add(new Slot("Addition", smithing.addition()));
             }
-            case StonecutterRecipeDisplay stonecutter -> slots.add(new Slot(MESSAGE_INGREDIENT, stonecutter.input()));
+            case StonecutterRecipeDisplay stonecutter -> slots.add(new Slot(DatapackEditorConstants.MESSAGE_INGREDIENT, stonecutter.input()));
             default -> title = "Custom display · result and station only";
         }
         slots.add(new Slot("Result", display.result()));

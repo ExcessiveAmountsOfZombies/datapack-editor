@@ -41,6 +41,13 @@ public class DatapackEditorConstants {
     public static final int WORK_TIMEOUT_SECONDS = 15;
     public static final int SCHEMA_MAX_DEFINITIONS = 50_000;
     public static final int HTTP_TOO_MANY_REQUESTS = 429;
+    public static final int HTTP_BAD_REQUEST = 400;
+    public static final int HTTP_NOT_FOUND = 404;
+    public static final int HTTP_INTERNAL_SERVER_ERROR = 500;
+    public static final int HTTP_SERVICE_UNAVAILABLE = 503;
+    public static final int HTTP_CREATED = 201;
+    public static final int HTTP_CONFLICT = 409;
+    public static final int HTTP_REQUEST_MAX_BYTES = EDITOR_JSON_MAX_BYTES + KIBIBYTE;
     public static final int MEMORY_POLL_INTERVAL_MS = 100;
     public static final int PNG_DIMENSION_BYTES = 4;
     public static final int UTF16_BYTES_PER_CHAR = 2;
@@ -77,6 +84,14 @@ public class DatapackEditorConstants {
     public static final String SCHEMA_STRING = "string";
 
     public static final String HTTP_CACHE_CONTROL = "Cache-Control";
+    public static final String HTTP_CONTENT_LENGTH = "Content-Length";
+    public static final String HTTP_CAPTURE_END = ">";
+    public static final String HTTP_ORIGIN_PREFIX = "http://";
+    public static final String HTTP_ZIP = "application/zip";
+    public static final String FILE_EXTENSION_JSON = "json";
+    public static final String HTTP_METHOD_GET = "GET";
+    public static final String HTTP_METHOD_HEAD = "HEAD";
+    public static final String HTTP_TEXT_UTF8 = "text/plain; charset=utf-8";
     public static final String HTTP_JSON = "application/json";
     public static final String HTTP_JSON_SCHEMA = "application/schema+json";
     public static final String HTTP_JSON_UTF8 = "application/json; charset=utf-8";

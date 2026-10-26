@@ -10,12 +10,13 @@ import com.epherical.datapackeditor.editor.loot.EditorLootSimulation;
 import com.epherical.datapackeditor.editor.recipe.EditorIngredientPreview;
 import com.epherical.datapackeditor.editor.recipe.EditorRecipeCatalog;
 import com.epherical.datapackeditor.editor.recipe.EditorRecipePreview;
-import io.javalin.Javalin;
+import com.epherical.datapackeditor.editor.http.EditorHttpServer;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
 import net.minecraft.server.MinecraftServer;
 
 public class EditorWebServer {
 
-    private static Javalin application;
+    private static EditorHttpServer application;
     private static EditorAssets assets;
     private static MemoryChecker memoryWatcher;
     private static EditorSchemas schemas;
@@ -25,7 +26,7 @@ public class EditorWebServer {
             return new StartResult(false, editorUrl());
         }
 
-        Javalin newApplication = null;
+        EditorHttpServer newApplication = null;
         EditorAssets newAssets = null;
         MemoryChecker newMemoryWatcher = null;
         EditorSchemas newSchemas = null;
@@ -40,28 +41,20 @@ public class EditorWebServer {
             EditorAssets configuredAssets = newAssets;
             newSchemas = new EditorSchemas(server);
             EditorSchemas configuredSchemas = newSchemas;
-            newApplication = Javalin.create(config -> {
-                configuredMemoryWatcher.register(config);
-                EditorStaticFiles.register(config);
+            newApplication = EditorHttpServer.create(routes -> {
+                configuredMemoryWatcher.register(routes);
+                EditorStaticFiles.register(routes);
 
-                config.routes.before(ctx -> {
-                    ctx.header("X-Content-Type-Options", "nosniff");
-                    ctx.header("Referrer-Policy", "no-referrer");
-                    ctx.header("Content-Security-Policy",
-                            """
-                                    default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
-                                    img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:
-                                    """);
-                });
-                configuredSchemas.registerRoutes(config);
-                EditorWorkspace.registerRoutes(config);
-                datapacks.registerRoutes(config);
-                configuredAssets.registerRoutes(config);
-                new EditorLootSimulation(server).registerRoutes(config);
-                new EditorRecipeCatalog(server).registerRoutes(config);
-                new EditorIngredientPreview(server).registerRoutes(config);
-                new EditorRecipePreview(server).registerRoutes(config);
-                new EditorConfiguredFeaturePreview(server).registerRoutes(config);
+                registerSecurityHeaders(routes);
+                configuredSchemas.registerRoutes(routes);
+                EditorWorkspace.registerRoutes(routes);
+                datapacks.registerRoutes(routes);
+                configuredAssets.registerRoutes(routes);
+                new EditorLootSimulation(server).registerRoutes(routes);
+                new EditorRecipeCatalog(server).registerRoutes(routes);
+                new EditorIngredientPreview(server).registerRoutes(routes);
+                new EditorRecipePreview(server).registerRoutes(routes);
+                new EditorConfiguredFeaturePreview(server).registerRoutes(routes);
                 // todo; maybe add a visualizer for other loot table types...
                 // todo; biome visualizer?
                 // todo; recipe visualizer for sure, maybe it looks at the corresponding Menu class
@@ -93,12 +86,22 @@ public class EditorWebServer {
         }
     }
 
+    public static void registerSecurityHeaders(HttpRoutes routes) {
+        routes.before(context -> {
+            context.header("X-Content-Type-Options", "nosniff");
+            context.header("Referrer-Policy", "no-referrer");
+            context.header("Content-Security-Policy",
+                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                            + "img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:");
+        });
+    }
+
     public static synchronized boolean stop() {
         if (application == null) {
             return false;
         }
 
-        Javalin runningApplication = application;
+        EditorHttpServer runningApplication = application;
         application = null;
         if (schemas != null) schemas.close();
         schemas = null;
@@ -122,7 +125,7 @@ public class EditorWebServer {
     }
 
     public static synchronized String editorUrl() {
-        return "http://" + DatapackEditorConstants.HTTP_LOOPBACK_HOST + ":" + DatapackEditorConstants.EDITOR_HTTP_PORT + DatapackEditorConstants.PATH_SEPARATOR;
+        return DatapackEditorConstants.HTTP_ORIGIN_PREFIX + DatapackEditorConstants.HTTP_LOOPBACK_HOST + ":" + DatapackEditorConstants.EDITOR_HTTP_PORT + DatapackEditorConstants.PATH_SEPARATOR;
     }
 
     public record StartResult(boolean started, String url) {}

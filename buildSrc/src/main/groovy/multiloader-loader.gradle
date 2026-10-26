@@ -29,10 +29,6 @@ dependencies {
     commonJava project(path: ':common', configuration: 'commonJava')
     commonResources project(path: ':common', configuration: 'commonResources')
 
-    shadeRuntime("io.javalin:javalin:7.2.3") {
-        exclude group: "org.slf4j", module: "slf4j-api"
-        exclude group: "org.ow2.asm"
-    }
 }
 
 tasks.named('compileJava', JavaCompile) {
@@ -67,9 +63,5 @@ tasks.named('assemble') {
 
 tasks.named('shadowJar') {
     configurations = [project.configurations.shadeRuntime]
-    relocate("io.javalin", "com.epherical.datapackeditor.libs.io.javalin")
-    relocate("org.eclipse.jetty", "com.epherical.datapackeditor.libs.org.eclipse.jetty")
-    relocate("jakarta", "com.epherical.datapackeditor.libs.jakarta")
-    relocate("kotlin", "com.epherical.datapackeditor.libs.kotlin")
     mergeServiceFiles()
 }

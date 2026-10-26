@@ -9,12 +9,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.epherical.datapackeditor.editor.advancement.AdvancementCacher.SelectionException;
-import io.javalin.config.JavalinConfig;
-import jakarta.servlet.DispatcherType;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.eclipse.jetty.ee10.servlet.FilterHolder;
-import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
 import org.slf4j.Logger;
 
 import java.lang.management.ManagementFactory;
@@ -23,7 +18,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
-import java.util.EnumSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -116,36 +110,38 @@ public class MemoryChecker {
         reason = message;
         tripped.set(true);
         LOGGER.error("{}", message);
-        // Jetty must never be stopped from the request thread it is trying to join.
+        // Stop outside the request thread so the HTTP server can finish active responses.
         Thread.ofPlatform().daemon().name("datapack-editor-memory-stop").start(shutdown);
     }
 
-    public void register(JavalinConfig config) {
-        config.http.maxRequestSize = DatapackEditorConstants.EDITOR_JSON_MAX_BYTES + DatapackEditorConstants.KIBIBYTE;
-        config.jetty.threadPool = new QueuedThreadPool(24, 4);
-        config.routes.exception(CapacityException.class, (error, context) -> {
+    public void register(HttpRoutes routes) {
+        routes.before(context -> {
+            String length = context.requestHeader(DatapackEditorConstants.HTTP_CONTENT_LENGTH);
+            if (length != null && Long.parseLong(length) > DatapackEditorConstants.HTTP_REQUEST_MAX_BYTES) {
+                throw new CapacityException("HTTP request body exceeds the editor's request limit");
+            }
+        });
+        routes.exception(CapacityException.class, (error, context) -> {
             JsonObject result = new JsonObject();
             result.addProperty(DatapackEditorConstants.JSON_ERROR, error.getMessage());
             if (error instanceof SelectionException selection) result.add(DatapackEditorConstants.JSON_ROOTS, selection.roots());
             context.status(413).contentType(DatapackEditorConstants.HTTP_JSON).result(result.toString());
         });
-        config.routes.before(DatapackEditorConstants.ROUTE_API, _ -> check());
+        routes.before(DatapackEditorConstants.ROUTE_API, _ -> check());
         // Hold admission until the response stream finishes, including client disconnects.
-        config.jetty.modifyServletContextHandler(handler -> handler.addFilter(new FilterHolder((request, response, chain) -> {
-            HttpServletRequest httpRequest = (HttpServletRequest) request;
-            HttpServletResponse httpResponse = (HttpServletResponse) response;
-            if (httpRequest.getRequestURI().equals(DatapackEditorConstants.ROUTE_EDITOR_STOP)) {chain.doFilter(request, response); return;}
+        routes.filter(DatapackEditorConstants.ROUTE_API, (context, next) -> {
+            if (context.path().equals(DatapackEditorConstants.ROUTE_EDITOR_STOP)) {next.handle(context); return;}
             if (!requests.tryAcquire()) {
-                httpResponse.setStatus(DatapackEditorConstants.HTTP_TOO_MANY_REQUESTS);
-                httpResponse.setHeader(DatapackEditorConstants.HTTP_RETRY_AFTER, DatapackEditorConstants.HTTP_RETRY_SECONDS);
-                httpResponse.setContentType(DatapackEditorConstants.HTTP_JSON);
-                httpResponse.getWriter().write("{\"error\":\"Editor is busy; try again shortly\"}");
+                context.status(DatapackEditorConstants.HTTP_TOO_MANY_REQUESTS)
+                        .header(DatapackEditorConstants.HTTP_RETRY_AFTER, DatapackEditorConstants.HTTP_RETRY_SECONDS)
+                        .contentType(DatapackEditorConstants.HTTP_JSON)
+                        .result("{\"error\":\"Editor is busy; try again shortly\"}");
                 return;
             }
-            try {chain.doFilter(request, response);}
+            try {next.handle(context);}
             finally {requests.release();}
-        }), DatapackEditorConstants.ROUTE_API, EnumSet.of(DispatcherType.REQUEST)));
-        config.routes.post(DatapackEditorConstants.ROUTE_EDITOR_STOP, context -> {
+        });
+        routes.post(DatapackEditorConstants.ROUTE_EDITOR_STOP, context -> {
             context.status(202).contentType(DatapackEditorConstants.HTTP_JSON).result("{\"state\":\"stopping\"}");
             trip("Editor stopped at the browser's memory safeguard request");
         });
