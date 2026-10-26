@@ -30,7 +30,8 @@ interface AdvancementPreviewProps {
 
 function assetPath(id: string): string {
     const [namespace, path] = id.includes(":") ? id.split(":", 2) : ["minecraft", id];
-    return `assets/${namespace}/textures/${path}.png`;
+    const texture = path.replace(/^textures\//, "").replace(/\.png$/, "");
+    return `assets/${namespace}/textures/${texture}.png`;
 }
 
 function frameColor(frame?: string): string {
@@ -234,17 +235,17 @@ export function AdvancementPreview({
             setBackground(undefined);
             return;
         }
-        let cancelled = false;
+        const controller = new AbortController();
         let url: string | undefined;
         setBackground(undefined);
-        void fetch(`/api/asset-resolved?path=${encodeURIComponent(assetPath(source))}`).then(async response => {
+        void fetch(`/api/asset-resolved?path=${encodeURIComponent(assetPath(source))}`, {signal: controller.signal}).then(async response => {
             if (!response.ok) return;
-            url = URL.createObjectURL(new Blob([await boundedBytes(response, 8 * mib) as Uint8Array<ArrayBuffer>]));
-            if (cancelled) URL.revokeObjectURL(url);
+            url = URL.createObjectURL(new Blob([await boundedBytes(response, 8 * mib) as Uint8Array<ArrayBuffer>], {type: "image/png"}));
+            if (controller.signal.aborted) URL.revokeObjectURL(url);
             else setBackground(url);
         }).catch(() => undefined);
         return () => {
-            cancelled = true;
+            controller.abort();
             if (url) URL.revokeObjectURL(url);
         };
     }, [tree?.root.display?.background]);
@@ -296,6 +297,10 @@ export function AdvancementPreview({
             <div ref={viewport}
                  class="min-h-45 w-full flex-1 overflow-auto rounded border-2 border-[#4c4033] bg-[#242424] cursor-grab active:cursor-grabbing"
                  aria-label={`Advancement tree ${tree.root.id}`}
+                 style={{
+                     backgroundImage: background ? `url("${background}")` : undefined,
+                     backgroundRepeat: "repeat", backgroundAttachment: "local", imageRendering: "pixelated"
+                 }}
                  onScroll={event => {
                      const panel = event.currentTarget;
                      setViewBounds({left: panel.scrollLeft, top: panel.scrollTop,
@@ -322,11 +327,7 @@ export function AdvancementPreview({
                  }} onPointerCancel={() => {
                 drag.current = undefined;
             }}>
-                <div class="relative" style={{
-                    width: `${width}px`, height: `${height}px`,
-                    backgroundImage: background ? `url("${background}")` : undefined,
-                    backgroundRepeat: "repeat", imageRendering: "pixelated"
-                }}>
+                <div class="relative" style={{width: `${width}px`, height: `${height}px`}}>
                     <svg class="pointer-events-none absolute inset-0" width={width} height={height} aria-hidden="true">
                         <path d={connectionPath} fill="none" stroke="#17120d" stroke-width="5"/>
                         <path d={connectionPath} fill="none" stroke="#a99b83" stroke-width="2"/>
