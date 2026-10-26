@@ -10,7 +10,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import io.javalin.config.JavalinConfig;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
@@ -58,16 +58,16 @@ public class EditorSchemas implements AutoCloseable {
         return current;
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.before("/api/schema/*", context -> context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE));
-        config.routes.exception(CancellationException.class, (error, context) -> context.status(503)
+    public void registerRoutes(HttpRoutes routes) {
+        routes.before("/api/schema/*", context -> context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE));
+        routes.exception(CancellationException.class, (error, context) -> context.status(503)
                 .contentType(DatapackEditorConstants.HTTP_JSON)
                 .result(GSON.toJson(Map.of(DatapackEditorConstants.JSON_ERROR, error.getMessage() == null ? DatapackEditorConstants.MESSAGE_SCHEMA_GENERATION_CANCELLED : error.getMessage()))));
-        config.routes.exception(RejectedExecutionException.class, (error, context) -> context.status(DatapackEditorConstants.HTTP_TOO_MANY_REQUESTS)
+        routes.exception(RejectedExecutionException.class, (error, context) -> context.status(DatapackEditorConstants.HTTP_TOO_MANY_REQUESTS)
                 .header(DatapackEditorConstants.HTTP_RETRY_AFTER, DatapackEditorConstants.HTTP_RETRY_SECONDS).contentType(DatapackEditorConstants.HTTP_JSON)
                 .result(GSON.toJson(Map.of(DatapackEditorConstants.JSON_ERROR, "Schema compiler is busy"))));
-        config.routes.get("/api/schema/catalog", context -> {
-            Generation owner = generation(origin(context.req().getScheme(), context.req().getServerName(), context.req().getServerPort()));
+        routes.get("/api/schema/catalog", context -> {
+            Generation owner = generation(context.origin());
             JsonArray catalog = new JsonArray();
             DataPackRegistrationImpl.catalog().forEach((id, entry) -> {
                 entry.addProperty(DatapackEditorConstants.JSON_URI, owner.uri(DatapackEditorConstants.JSON_DATAPACK, id));
@@ -95,8 +95,8 @@ public class EditorSchemas implements AutoCloseable {
             result.add(DatapackEditorConstants.JSON_SCHEMAS, catalog);
             context.contentType(DatapackEditorConstants.HTTP_JSON).result(result.toString());
         });
-        config.routes.get("/api/schema/family", context -> {
-            Generation owner = generation(origin(context.req().getScheme(), context.req().getServerName(), context.req().getServerPort()));
+        routes.get("/api/schema/family", context -> {
+            Generation owner = generation(context.origin());
             owner.validate(context.queryParam(DatapackEditorConstants.JSON_GENERATION));
             String kind = context.queryParam("kind");
             String resourceId = context.queryParam(DatapackEditorConstants.JSON_DIRECTORY);
@@ -111,8 +111,8 @@ public class EditorSchemas implements AutoCloseable {
             });
             context.contentType(DatapackEditorConstants.HTTP_JSON_SCHEMA).result(response);
         });
-        config.routes.get("/api/schema/registry", context -> {
-            Generation owner = generation(origin(context.req().getScheme(), context.req().getServerName(), context.req().getServerPort()));
+        routes.get("/api/schema/registry", context -> {
+            Generation owner = generation(context.origin());
             owner.validate(context.queryParam(DatapackEditorConstants.JSON_GENERATION));
             String name = context.queryParam(DatapackEditorConstants.JSON_REGISTRY);
             boolean tags = Boolean.parseBoolean(context.queryParam(DatapackEditorConstants.JSON_TAGS));
@@ -127,10 +127,6 @@ public class EditorSchemas implements AutoCloseable {
         JsonArray schemas = response.getAsJsonArray(DatapackEditorConstants.JSON_SCHEMAS);
         if (schemas.isEmpty()) throw new IllegalArgumentException("Unknown schema resource");
         return schemas.get(0).getAsJsonObject().get(DatapackEditorConstants.JSON_SCHEMA);
-    }
-
-    private static String origin(String scheme, String host, int port) {
-        return scheme + "://" + host + ":" + port;
     }
 
     public synchronized void close() {

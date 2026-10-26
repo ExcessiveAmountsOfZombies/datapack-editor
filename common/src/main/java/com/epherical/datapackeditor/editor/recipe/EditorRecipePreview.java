@@ -1,21 +1,19 @@
 package com.epherical.datapackeditor.editor.recipe;
 
-import com.epherical.datapackeditor.DatapackEditorConstants;
-
 import com.epherical.datapackeditor.CommonPlatform;
+import com.epherical.datapackeditor.DatapackEditorConstants;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.HttpStatus;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 
 import java.util.ArrayList;
@@ -29,7 +27,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiFunction;
-
 
 public class EditorRecipePreview {
     private static final Map<ResourceLocation, BiFunction<MinecraftServer, Recipe<?>, List<Display>>> ADAPTERS = new ConcurrentHashMap<>();
@@ -50,20 +47,20 @@ public class EditorRecipePreview {
     }
     public record Display(String title, List<Slot> slots) {}
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.post("/api/recipe-preview", context -> {
+    public void registerRoutes(HttpRoutes routes) {
+        routes.post("/api/recipe-preview", context -> {
             try {
                 JsonObject definition = JsonParser.parseString(context.body()).getAsJsonObject();
                 JsonObject result = CompletableFuture.supplyAsync(() -> resolve(definition), server).get(DatapackEditorConstants.WORK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE).contentType(DatapackEditorConstants.HTTP_JSON).result(result.toString());
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                context.status(HttpStatus.SERVICE_UNAVAILABLE);
+                context.status(DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE);
             } catch (JsonParseException | IllegalStateException | IllegalArgumentException | ExecutionException | TimeoutException exception) {
                 JsonObject error = new JsonObject();
                 Throwable cause = exception instanceof ExecutionException ? exception.getCause() : exception;
                 error.addProperty(DatapackEditorConstants.JSON_ERROR, cause.getMessage());
-                context.status(HttpStatus.BAD_REQUEST).contentType(DatapackEditorConstants.HTTP_JSON).result(error.toString());
+                context.status(DatapackEditorConstants.HTTP_BAD_REQUEST).contentType(DatapackEditorConstants.HTTP_JSON).result(error.toString());
             }
         });
     }

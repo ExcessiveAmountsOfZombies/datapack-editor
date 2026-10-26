@@ -11,9 +11,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
 import com.google.gson.stream.JsonWriter;
 import com.mojang.logging.LogUtils;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
@@ -140,24 +139,24 @@ public class EditorDatapacks {
         }
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.get("/api/datapacks", this::writeTree);
-        config.routes.get("/api/datapack-file", this::readFile);
-        config.routes.get("/api/advancements", this::writeAdvancements);
-        config.routes.post("/api/advancement-tree", context -> {
+    public void registerRoutes(HttpRoutes routes) {
+        routes.get("/api/datapacks", this::writeTree);
+        routes.get("/api/datapack-file", this::readFile);
+        routes.get("/api/advancements", this::writeAdvancements);
+        routes.post("/api/advancement-tree", context -> {
             try {
                 int cursor = Integer.parseInt(Objects.requireNonNullElse(context.queryParam(DatapackEditorConstants.JSON_CURSOR), "0"));
                 int limit = Integer.parseInt(Objects.requireNonNullElse(context.queryParam(DatapackEditorConstants.JSON_LIMIT), "32"));
                 context.contentType(DatapackEditorConstants.HTTP_JSON).result(advancementCacher.page(
                         MemoryChecker.json(context.bodyAsBytes()).getAsJsonObject(), cursor, limit).toString());
             } catch (IllegalArgumentException | IllegalStateException exception) {
-                error(context, HttpStatus.BAD_REQUEST, "Invalid advancement tree request");
+                error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid advancement tree request");
             }
         });
-        config.routes.post("/api/datapack-override", this::createOverride);
+        routes.post("/api/datapack-override", this::createOverride);
     }
 
-    private void readFile(Context context) {
+    private void readFile(HttpContext context) {
         LoadedFile file = requestedFile(context);
         if (file == null) {
             return;
@@ -168,55 +167,55 @@ public class EditorDatapacks {
                     .contentType(DatapackEditorConstants.HTTP_JSON_UTF8)
                     .result(MemoryChecker.bytes(input, DatapackEditorConstants.EDITOR_JSON_MAX_BYTES, "Loaded datapack JSON"));
         } catch (IOException exception) {
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not read the loaded data-pack file");
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, "Could not read the loaded data-pack file");
         }
     }
 
-    private void createOverride(Context context) {
+    private void createOverride(HttpContext context) {
         LoadedFile file = requestedFile(context);
         if (file == null) {
             return;
         }
         int dataPath = file.path.indexOf(DatapackEditorConstants.PATH_SEPARATOR + DatapackEditorConstants.PATH_DATA + DatapackEditorConstants.PATH_SEPARATOR);
         if (dataPath < 0) {
-            error(context, HttpStatus.BAD_REQUEST, "Data-pack file has no override path");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Data-pack file has no override path");
             return;
         }
 
         try (InputStream input = file.resource.open()) {
             byte[] bytes = input.readNBytes(DatapackEditorConstants.EDITOR_JSON_MAX_BYTES + 1);
             if (bytes.length > DatapackEditorConstants.EDITOR_JSON_MAX_BYTES) {
-                error(context, HttpStatus.BAD_REQUEST, DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
+                error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
                 return;
             }
             String workspacePath = EditorWorkspace.writeDatapackOverride(
                     file.path.substring(dataPath + DatapackEditorConstants.PATH_SEPARATOR.length()), new String(bytes, StandardCharsets.UTF_8));
-            context.status(HttpStatus.CREATED)
+            context.status(DatapackEditorConstants.HTTP_CREATED)
                     .contentType(DatapackEditorConstants.HTTP_JSON)
                     .result(GSON.toJson(Map.of("operation", "overridden", DatapackEditorConstants.JSON_PATH, workspacePath)));
         } catch (EditorWorkspace.WorkspaceException exception) {
-            error(context, HttpStatus.BAD_REQUEST, exception.getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, exception.getMessage());
         } catch (IOException exception) {
             LOGGER.warn("Could not create workspace override for {}", file.path, exception);
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not create the workspace override");
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, "Could not create the workspace override");
         }
     }
 
-    private LoadedFile requestedFile(Context context) {
+    private LoadedFile requestedFile(HttpContext context) {
         String path = context.queryParam(DatapackEditorConstants.JSON_PATH);
         if (path == null || path.isBlank()) {
-            error(context, HttpStatus.BAD_REQUEST, "A data-pack path is required");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "A data-pack path is required");
             return null;
         }
         Resource resource = files.get(path);
         if (resource == null) {
-            error(context, HttpStatus.NOT_FOUND, "Data-pack file was not found");
+            error(context, DatapackEditorConstants.HTTP_NOT_FOUND, "Data-pack file was not found");
             return null;
         }
         return new LoadedFile(path, resource);
     }
 
-    private void writeTree(Context context) throws IOException {
+    private void writeTree(HttpContext context) throws IOException {
         JsonWriter writer = responseWriter(context);
         writer.beginObject().name(DatapackEditorConstants.JSON_ROOT).value(DatapackEditorConstants.EDITOR_LOADED_DATAPACKS).name(DatapackEditorConstants.JSON_READ_ONLY).value(true)
                 .name("fileCount").value(files.size()).name(DatapackEditorConstants.JSON_ENTRIES);
@@ -225,7 +224,7 @@ public class EditorDatapacks {
         writer.flush();
     }
 
-    private void writeAdvancements(Context context) throws IOException {
+    private void writeAdvancements(HttpContext context) throws IOException {
         int cursor;
         int limit;
         try {
@@ -235,7 +234,7 @@ public class EditorDatapacks {
                 throw new NumberFormatException();
             }
         } catch (NumberFormatException exception) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid advancement cursor or limit (1–" + DatapackEditorConstants.ADVANCEMENT_LEGACY_MAX_PAGE_SIZE + ")");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid advancement cursor or limit (1–" + DatapackEditorConstants.ADVANCEMENT_LEGACY_MAX_PAGE_SIZE + ")");
             return;
         }
         int end = Math.min(advancementPaths.size(), cursor + limit);
@@ -265,7 +264,7 @@ public class EditorDatapacks {
         writer.flush();
     }
 
-    private static JsonWriter responseWriter(Context context) {
+    private static JsonWriter responseWriter(HttpContext context) {
         context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE).contentType(DatapackEditorConstants.HTTP_JSON_UTF8);
         return new JsonWriter(new BufferedWriter(new OutputStreamWriter(context.outputStream(), StandardCharsets.UTF_8), DatapackEditorConstants.TEXT_CHUNK_CHARS));
     }
@@ -306,7 +305,7 @@ public class EditorDatapacks {
         }
     }
 
-    private static void error(Context context, HttpStatus status, String message) {
+    private static void error(HttpContext context, int status, String message) {
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON)
                 .result(GSON.toJson(Map.of(DatapackEditorConstants.JSON_ERROR, message)));
     }

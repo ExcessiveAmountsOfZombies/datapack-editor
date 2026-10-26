@@ -9,9 +9,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -51,11 +50,11 @@ public class EditorLootSimulation {
         this.server = server;
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.post("/api/chest-simulation", this::simulateChest);
+    public void registerRoutes(HttpRoutes routes) {
+        routes.post("/api/chest-simulation", this::simulateChest);
     }
 
-    private void simulateChest(Context context) {
+    private void simulateChest(HttpContext context) {
         JsonObject definition;
         ResourceLocation tableId;
         try {
@@ -67,16 +66,16 @@ public class EditorLootSimulation {
             String type = typeValue != null && typeValue.isJsonPrimitive()
                     && typeValue.getAsJsonPrimitive().isString() ? typeValue.getAsString() : "";
             if (!"minecraft:chest".equals(type) && !"chest".equals(type)) {
-                error(context, HttpStatus.BAD_REQUEST, "Expected a chest loot table");
+                error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Expected a chest loot table");
                 return;
             }
             workspaceReferences(definition, new HashSet<>(), 0);
         } catch (JsonParseException | IllegalStateException | IllegalArgumentException exception) {
-            error(context, HttpStatus.BAD_REQUEST, DatapackEditorConstants.MESSAGE_INVALID_LOOT_TABLE_PREFIX + exception.getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, DatapackEditorConstants.MESSAGE_INVALID_LOOT_TABLE_PREFIX + exception.getMessage());
             return;
         } catch (IOException exception) {
             LOGGER.warn("Could not read a workspace loot table for the editor preview", exception);
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not read a referenced workspace loot table");
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, "Could not read a referenced workspace loot table");
             return;
         }
 
@@ -88,16 +87,16 @@ public class EditorLootSimulation {
                     .result(result.toString());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "Loot simulation was interrupted");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "Loot simulation was interrupted");
         } catch (TimeoutException exception) {
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "The game server did not respond to the loot simulation");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "The game server did not respond to the loot simulation");
         } catch (ExecutionException exception) {
             Throwable cause = exception.getCause();
             if (cause instanceof JsonParseException || cause instanceof IllegalArgumentException) {
-                error(context, HttpStatus.BAD_REQUEST, DatapackEditorConstants.MESSAGE_INVALID_LOOT_TABLE_PREFIX + cause.getMessage());
+                error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, DatapackEditorConstants.MESSAGE_INVALID_LOOT_TABLE_PREFIX + cause.getMessage());
             } else {
                 LOGGER.warn("Could not simulate a chest loot table for the editor", cause);
-                error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Could not simulate this loot table");
+                error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, "Could not simulate this loot table");
             }
         }
     }
@@ -195,7 +194,7 @@ public class EditorLootSimulation {
         return null;
     }
 
-    private void error(Context context, HttpStatus status, String message) {
+    private void error(HttpContext context, int status, String message) {
         JsonObject response = new JsonObject();
         response.addProperty(DatapackEditorConstants.JSON_ERROR, message);
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON).result(response.toString());

@@ -5,9 +5,8 @@ import com.epherical.datapackeditor.editor.MemoryChecker;
 import com.epherical.datapackeditor.editor.MemoryChecker.CapacityException;
 import com.google.gson.*;
 import com.mojang.logging.LogUtils;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import net.minecraft.SharedConstants;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -94,16 +93,16 @@ public class EditorAssets {
         manifest = GSON.toJson(Map.of("version", version, DatapackEditorConstants.JSON_SOURCES, layers));
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.get("/api/assets", context -> context
+    public void registerRoutes(HttpRoutes routes) {
+        routes.get("/api/assets", context -> context
                 .header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE)
                 .contentType(DatapackEditorConstants.HTTP_JSON)
                 .result(manifest));
-        config.routes.get("/api/asset-file", this::readFile);
-        config.routes.get("/api/asset-resolved", this::readResolvedFile);
-        config.routes.get("/api/asset-list", this::listDirectory);
-        config.routes.get("/api/asset-list-resolved", this::listResolvedDirectory);
-        config.routes.get("/api/asset-bundle", this::readBundle);
+        routes.get("/api/asset-file", this::readFile);
+        routes.get("/api/asset-resolved", this::readResolvedFile);
+        routes.get("/api/asset-list", this::listDirectory);
+        routes.get("/api/asset-list-resolved", this::listResolvedDirectory);
+        routes.get("/api/asset-bundle", this::readBundle);
     }
 
     private synchronized CompletableFuture<Path> bundle() {
@@ -126,14 +125,14 @@ public class EditorAssets {
         }
     }
 
-    private void readBundle(Context context) throws IOException {
+    private void readBundle(HttpContext context) throws IOException {
         Path path = bundle().join();
         if (path == null) {
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "Asset bundle unavailable");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "Asset bundle unavailable");
             return;
         }
         context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_PRIVATE_CACHE)
-                .contentType("application/zip")
+                .contentType(DatapackEditorConstants.HTTP_ZIP)
                 .result(Files.newInputStream(path));
     }
 
@@ -293,32 +292,32 @@ public class EditorAssets {
         }
     }
 
-    private void readFile(Context context) {
+    private void readFile(HttpContext context) {
         Source source = requestedSource(context);
         String path = context.queryParam(DatapackEditorConstants.JSON_PATH);
         if (source == null || !validFilePath(path)) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid asset source or path");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid asset source or path");
             return;
         }
         try {
             byte[] bytes = source.read(path);
             if (bytes == null) {
-                error(context, HttpStatus.NOT_FOUND, DatapackEditorConstants.MESSAGE_ASSET_NOT_FOUND);
+                error(context, DatapackEditorConstants.HTTP_NOT_FOUND, DatapackEditorConstants.MESSAGE_ASSET_NOT_FOUND);
                 return;
             }
             context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_PRIVATE_CACHE)
                     .contentType(DatapackEditorConstants.HTTP_OCTET_STREAM)
                     .result(adaptItemDefinition(path, bytes));
         } catch (IOException exception) {
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, DatapackEditorConstants.MESSAGE_COULD_NOT_READ_ASSET);
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, DatapackEditorConstants.MESSAGE_COULD_NOT_READ_ASSET);
         }
     }
 
-    private void listDirectory(Context context) {
+    private void listDirectory(HttpContext context) {
         Source source = requestedSource(context);
         String directory = context.queryParam(DatapackEditorConstants.JSON_DIR);
         if (source == null || !validDirectory(directory)) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid asset source or directory");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid asset source or directory");
             return;
         }
         context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_PRIVATE_CACHE)
@@ -326,10 +325,10 @@ public class EditorAssets {
                 .result(directoryJson(source.getListOfAssets(directory)));
     }
 
-    private void readResolvedFile(Context context) {
+    private void readResolvedFile(HttpContext context) {
         String path = context.queryParam(DatapackEditorConstants.JSON_PATH);
         if (!validFilePath(path)) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid asset path");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid asset path");
             return;
         }
         try {
@@ -340,16 +339,16 @@ public class EditorAssets {
                         .result(bytes);
                 return;
             }
-            error(context, HttpStatus.NOT_FOUND, DatapackEditorConstants.MESSAGE_ASSET_NOT_FOUND);
+            error(context, DatapackEditorConstants.HTTP_NOT_FOUND, DatapackEditorConstants.MESSAGE_ASSET_NOT_FOUND);
         } catch (IOException exception) {
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, DatapackEditorConstants.MESSAGE_COULD_NOT_READ_ASSET);
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, DatapackEditorConstants.MESSAGE_COULD_NOT_READ_ASSET);
         }
     }
 
-    private void listResolvedDirectory(Context context) {
+    private void listResolvedDirectory(HttpContext context) {
         String directory = context.queryParam(DatapackEditorConstants.JSON_DIR);
         if (!validDirectory(directory)) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid asset directory");
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid asset directory");
             return;
         }
         Set<String> names = new TreeSet<>();
@@ -375,7 +374,7 @@ public class EditorAssets {
         return GSON.toJson(names);
     }
 
-    private @Nullable Source requestedSource(Context context) {
+    private @Nullable Source requestedSource(HttpContext context) {
         try {
             int index = Integer.parseInt(context.queryParam(DatapackEditorConstants.JSON_SOURCE));
             return index >= 0 && index < sources.size() ? sources.get(index) : null;
@@ -405,7 +404,7 @@ public class EditorAssets {
         return ASSET_PATH.matcher(path).matches();
     }
 
-    private void error(Context context, HttpStatus status, String message) {
+    private void error(HttpContext context, int status, String message) {
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON)
                 .result(GSON.toJson(Map.of(DatapackEditorConstants.JSON_ERROR, message)));
     }

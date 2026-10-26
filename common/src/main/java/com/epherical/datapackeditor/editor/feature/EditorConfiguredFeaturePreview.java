@@ -4,9 +4,8 @@ import com.epherical.datapackeditor.CommonPlatform;
 import com.epherical.datapackeditor.DatapackEditorConstants;
 import com.google.gson.*;
 import com.mojang.serialization.JsonOps;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -41,11 +40,11 @@ public class EditorConfiguredFeaturePreview {
         this.server = server;
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.post("/api/configured-feature-preview", this::preview);
+    public void registerRoutes(HttpRoutes routes) {
+        routes.post("/api/configured-feature-preview", this::preview);
     }
 
-    private void preview(Context context) {
+    private void preview(HttpContext context) {
         CompletableFuture<JsonObject> pending = null;
         try {
             if (context.body().getBytes(StandardCharsets.UTF_8).length > DatapackEditorConstants.EDITOR_JSON_MAX_BYTES)
@@ -57,14 +56,14 @@ public class EditorConfiguredFeaturePreview {
         } catch (InterruptedException exception) {
             pending.cancel(false);
             Thread.currentThread().interrupt();
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "Feature preview was interrupted");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "Feature preview was interrupted");
         } catch (TimeoutException exception) {
             pending.cancel(false);
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "The game server did not respond to the feature preview");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "The game server did not respond to the feature preview");
         } catch (ExecutionException exception) {
-            error(context, HttpStatus.BAD_REQUEST, "Could not generate feature: " + exception.getCause().getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Could not generate feature: " + exception.getCause().getMessage());
         } catch (RuntimeException exception) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid feature preview: " + exception.getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid feature preview: " + exception.getMessage());
         }
     }
 
@@ -194,7 +193,7 @@ public class EditorConfiguredFeaturePreview {
         }
     }
 
-    private void error(Context context, HttpStatus status, String message) {
+    private void error(HttpContext context, int status, String message) {
         JsonObject response = new JsonObject();
         response.addProperty(DatapackEditorConstants.JSON_ERROR, message);
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON).result(response.toString());

@@ -6,9 +6,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -29,11 +28,11 @@ public class EditorIngredientPreview {
         this.server = server;
     }
 
-    public void registerRoutes(JavalinConfig config) {
-        config.routes.post("/api/ingredient-preview", this::preview);
+    public void registerRoutes(HttpRoutes routes) {
+        routes.post("/api/ingredient-preview", this::preview);
     }
 
-    private void preview(Context context) {
+    private void preview(HttpContext context) {
         try {
             JsonObject request = JsonParser.parseString(context.body()).getAsJsonObject();
             JsonObject ingredients = request.getAsJsonObject(DatapackEditorConstants.JSON_INGREDIENTS);
@@ -49,17 +48,17 @@ public class EditorIngredientPreview {
             }, server).get(DatapackEditorConstants.WORK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE).contentType(DatapackEditorConstants.HTTP_JSON).result(response.toString());
         } catch (JsonParseException | IllegalStateException | IllegalArgumentException exception) {
-            error(context, HttpStatus.BAD_REQUEST, "Invalid ingredients: " + exception.getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, "Invalid ingredients: " + exception.getMessage());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "Ingredient preview interrupted");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "Ingredient preview interrupted");
         } catch (ExecutionException exception) {
             Throwable cause = exception.getCause();
             error(context, cause instanceof IllegalArgumentException || cause instanceof JsonParseException
-                            ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR,
+                            ? DatapackEditorConstants.HTTP_BAD_REQUEST : DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR,
                     "Ingredient preview failed: " + cause.getMessage());
         } catch (TimeoutException exception) {
-            error(context, HttpStatus.SERVICE_UNAVAILABLE, "The server could not resolve the ingredients");
+            error(context, DatapackEditorConstants.HTTP_SERVICE_UNAVAILABLE, "The server could not resolve the ingredients");
         }
     }
 
@@ -102,7 +101,7 @@ public class EditorIngredientPreview {
         return result;
     }
 
-    private void error(Context context, HttpStatus status, String message) {
+    private void error(HttpContext context, int status, String message) {
         JsonObject response = new JsonObject();
         response.addProperty(DatapackEditorConstants.JSON_ERROR, message);
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON).result(response.toString());

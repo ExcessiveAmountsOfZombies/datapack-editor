@@ -5,9 +5,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import io.javalin.config.JavalinConfig;
-import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
+import com.epherical.datapackeditor.editor.http.HttpRoutes;
+import com.epherical.datapackeditor.editor.http.HttpContext;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -31,7 +30,7 @@ import java.util.stream.Stream;
 
 public class EditorWorkspace {
     private static final Set<String> EDITABLE_EXTENSIONS = Set.of(
-            "js", "json", "txt", "md", "mcfunction", DatapackEditorConstants.JSON_PROPERTIES, "toml", "yaml", "yml"
+            "js", DatapackEditorConstants.FILE_EXTENSION_JSON, "txt", "md", "mcfunction", DatapackEditorConstants.JSON_PROPERTIES, "toml", "yaml", "yml"
     );
     private static final Path ROOT = Path.of(DatapackEditorConstants.PATH_WORKSPACE).toAbsolutePath().normalize();
 
@@ -51,15 +50,15 @@ public class EditorWorkspace {
         }
     }
 
-    public static void registerRoutes(JavalinConfig config) {
-        config.routes.get("/api/workspace", EditorWorkspace::listWorkspace);
-        config.routes.get(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::readFile);
-        config.routes.put(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::saveFile);
-        config.routes.post(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::createFile);
-        config.routes.post("/api/folder", EditorWorkspace::createFolder);
-        config.routes.post("/api/move", EditorWorkspace::moveEntry);
-        config.routes.post("/api/export-datapack", EditorWorkspace::exportDatapack);
-        config.routes.delete("/api/entry", EditorWorkspace::deleteEntry);
+    public static void registerRoutes(HttpRoutes routes) {
+        routes.get("/api/workspace", EditorWorkspace::listWorkspace);
+        routes.get(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::readFile);
+        routes.put(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::saveFile);
+        routes.post(DatapackEditorConstants.ROUTE_FILE, EditorWorkspace::createFile);
+        routes.post("/api/folder", EditorWorkspace::createFolder);
+        routes.post("/api/move", EditorWorkspace::moveEntry);
+        routes.post("/api/export-datapack", EditorWorkspace::exportDatapack);
+        routes.delete("/api/entry", EditorWorkspace::deleteEntry);
     }
 
     public static synchronized String writeDatapackOverride(String workspacePath, String content) throws IOException {
@@ -96,7 +95,7 @@ public class EditorWorkspace {
         }
     }
 
-    private static synchronized void listWorkspace(Context context) {
+    private static synchronized void listWorkspace(HttpContext context) {
         handle(context, () -> {
             StringBuilder json = new StringBuilder("{\"root\":\"")
                     .append(jsonEscape(DatapackEditorConstants.PATH_WORKSPACE))
@@ -108,7 +107,7 @@ public class EditorWorkspace {
         });
     }
 
-    private static synchronized void readFile(Context context) {
+    private static synchronized void readFile(HttpContext context) {
         handle(context, () -> {
             Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableFile(file);
@@ -117,12 +116,12 @@ public class EditorWorkspace {
                 throw new WorkspaceException(DatapackEditorConstants.MESSAGE_WORKSPACE_FILE_TOO_LARGE);
             }
             context.header(DatapackEditorConstants.HTTP_CACHE_CONTROL, DatapackEditorConstants.HTTP_NO_STORE)
-                    .contentType("text/plain; charset=utf-8")
+                    .contentType(DatapackEditorConstants.HTTP_TEXT_UTF8)
                     .result(Files.readString(file, StandardCharsets.UTF_8));
         });
     }
 
-    private static synchronized void saveFile(Context context) {
+    private static synchronized void saveFile(HttpContext context) {
         handle(context, () -> {
             Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableFile(file);
@@ -137,28 +136,28 @@ public class EditorWorkspace {
         });
     }
 
-    private static synchronized void createFile(Context context) {
+    private static synchronized void createFile(HttpContext context) {
         handle(context, () -> {
             Path file = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireEditableExtension(file);
             requireExistingParent(file);
             Files.createFile(file);
-            context.status(HttpStatus.CREATED);
+            context.status(DatapackEditorConstants.HTTP_CREATED);
             success(context, DatapackEditorConstants.JSON_CREATED, relativePath(file));
         });
     }
 
-    private static synchronized void createFolder(Context context) {
+    private static synchronized void createFolder(HttpContext context) {
         handle(context, () -> {
             Path folder = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireExistingParent(folder);
             Files.createDirectory(folder);
-            context.status(HttpStatus.CREATED);
+            context.status(DatapackEditorConstants.HTTP_CREATED);
             success(context, DatapackEditorConstants.JSON_CREATED, relativePath(folder));
         });
     }
 
-    private static synchronized void moveEntry(Context context) {
+    private static synchronized void moveEntry(HttpContext context) {
         handle(context, () -> {
             Path source = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             Path target = resolveEntry(requiredQuery(context, "target"));
@@ -173,7 +172,7 @@ public class EditorWorkspace {
         });
     }
 
-    private static synchronized void exportDatapack(Context context) {
+    private static synchronized void exportDatapack(HttpContext context) {
         handle(context, () -> {
             JsonObject request;
             try {
@@ -194,11 +193,11 @@ public class EditorWorkspace {
             } catch (InvalidPathException exception) {
                 throw new WorkspaceException("The computer cannot use that ZIP filename: " + exception.getMessage());
             } catch (IOException exception) {
-                error(context, HttpStatus.INTERNAL_SERVER_ERROR,
+                error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR,
                         "Could not create the datapack ZIP: " + exception.getMessage());
                 return;
             }
-            context.status(HttpStatus.CREATED);
+            context.status(DatapackEditorConstants.HTTP_CREATED);
             success(context, "exported", exported.toString());
         });
     }
@@ -211,7 +210,7 @@ public class EditorWorkspace {
         return value.getAsString();
     }
 
-    private static synchronized void deleteEntry(Context context) {
+    private static synchronized void deleteEntry(HttpContext context) {
         handle(context, () -> {
             Path entry = resolveEntry(requiredQuery(context, DatapackEditorConstants.JSON_PATH));
             requireExistingEntry(entry);
@@ -329,7 +328,7 @@ public class EditorWorkspace {
         }
     }
 
-    private static String requiredQuery(Context context, String name) {
+    private static String requiredQuery(HttpContext context, String name) {
         String value = context.queryParam(name);
         if (value == null) {
             throw new WorkspaceException("Missing query parameter: " + name);
@@ -341,28 +340,28 @@ public class EditorWorkspace {
         return ROOT.relativize(path).toString().replace('\\', '/');
     }
 
-    private static void handle(Context context, WorkspaceAction action) {
+    private static void handle(HttpContext context, WorkspaceAction action) {
         try {
             action.run();
         } catch (WorkspaceException exception) {
-            error(context, HttpStatus.BAD_REQUEST, exception.getMessage());
+            error(context, DatapackEditorConstants.HTTP_BAD_REQUEST, exception.getMessage());
         } catch (NoSuchFileException exception) {
-            error(context, HttpStatus.NOT_FOUND, "Workspace entry was not found");
+            error(context, DatapackEditorConstants.HTTP_NOT_FOUND, "Workspace entry was not found");
         } catch (FileAlreadyExistsException exception) {
-            error(context, HttpStatus.CONFLICT, "A workspace entry already exists at that path");
+            error(context, DatapackEditorConstants.HTTP_CONFLICT, "A workspace entry already exists at that path");
         } catch (DirectoryNotEmptyException exception) {
-            error(context, HttpStatus.CONFLICT, "Folder is not empty");
+            error(context, DatapackEditorConstants.HTTP_CONFLICT, "Folder is not empty");
         } catch (IOException exception) {
-            error(context, HttpStatus.INTERNAL_SERVER_ERROR, "Workspace operation failed");
+            error(context, DatapackEditorConstants.HTTP_INTERNAL_SERVER_ERROR, "Workspace operation failed");
         }
     }
 
-    private static void success(Context context, String operation, String path) {
+    private static void success(HttpContext context, String operation, String path) {
         context.contentType(DatapackEditorConstants.HTTP_JSON).result("{\"operation\":\"" + jsonEscape(operation)
                 + "\",\"path\":\"" + jsonEscape(path) + "\"}");
     }
 
-    private static void error(Context context, HttpStatus status, String message) {
+    private static void error(HttpContext context, int status, String message) {
         context.status(status).contentType(DatapackEditorConstants.HTTP_JSON)
                 .result("{\"error\":\"" + jsonEscape(message) + "\"}");
     }

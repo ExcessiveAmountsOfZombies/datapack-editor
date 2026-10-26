@@ -35,10 +35,6 @@ dependencies {
     compileOnly("com.epherical.epherolib:EpheroLib:${epherolib_version}-${epherolib_minecraft_version}") {
         transitive = false
     }
-    shade("io.javalin:javalin:7.2.3") {
-        exclude group: "org.slf4j", module: "slf4j-api"
-        exclude group: "org.ow2.asm" // both loaders already provide ASM...
-    }
 }
 
 def editorUiDirectory = rootProject.file('editor-ui')
@@ -108,10 +104,6 @@ shadowJar {
     archiveClassifier = ""
     enabled = true
     configurations = [project.configurations.shade]
-    relocate("io.javalin", "com.epherical.datapackeditor.libs.io.javalin")
-    relocate("org.eclipse.jetty", "com.epherical.datapackeditor.libs.org.eclipse.jetty")
-    relocate("jakarta", "com.epherical.datapackeditor.libs.jakarta")
-    relocate("kotlin", "com.epherical.datapackeditor.libs.kotlin")
     mergeServiceFiles()
 }
 
